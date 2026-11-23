@@ -21,6 +21,7 @@ const Areas = lazy(() => import('./pages/admin/Areas'));
 const Configuracoes = lazy(() => import('./pages/admin/Configuracoes'));
 const Auditoria = lazy(() => import('./pages/admin/Auditoria'));
 const Consolidado = lazy(() => import('./pages/admin/Consolidado'));
+const Pendencias = lazy(() => import('./pages/admin/Pendencias'));
 
 function Carregando() {
   return (
@@ -68,6 +69,7 @@ export default function App() {
         <Route path="conta" element={<Conta />} />
         <Route path="admin" element={<RequireAdmin />}>
           <Route index element={<Navigate to="importar" replace />} />
+          <Route path="pendencias" element={<Pendencias />} />
           <Route path="importar" element={<Importar />} />
           <Route path="classificacao" element={<Classificacao />} />
           <Route path="usuarios" element={<Usuarios />} />

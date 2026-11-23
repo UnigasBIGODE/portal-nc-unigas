@@ -175,6 +175,32 @@ export interface ResultadoImportacao {
   totalAvisos: number;
   erros: { linha: number; nc_id: number | string; msg: string }[];
   avisos: { linha: number; nc_id: number | string; msg: string }[];
+  retomadas?: RetomadaImport[];
+  totalRetomadas?: number;
+  prorrogacoes?: ProrrogacaoImport[];
+  totalProrrogacoes?: number;
+  novasIds?: number[];
+  emails?: number;
+}
+
+/** NC com pedido de prorrogação que o Obrasoft devolveu para execução (resposta do verificador). */
+export interface ProrrogacaoImport {
+  nc_id: number;
+  titulo: string;
+  area: string;
+  pedido: string;
+  prazo: string;
+  aprovada: boolean;
+}
+
+/** NC que volta de etapa na importação (ex.: FINALIZADO → EXECUÇÃO). */
+export interface RetomadaImport {
+  nc_id: number;
+  titulo: string;
+  area: string;
+  de: string;
+  para: string;
+  motivo?: string;
 }
 
 export interface UsuarioAdmin extends Usuario {

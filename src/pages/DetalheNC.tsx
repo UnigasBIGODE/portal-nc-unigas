@@ -4,7 +4,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion, useMotionValueEvent, useScroll } from 'framer-motion';
 import { useToast } from '@/components/Toast';
 import { SucessoAnimado } from '@/components/Celebracao';
-import { ArrowLeft, ArrowRight, Check, CheckCircle2, Download, Eye, FileText, ImagePlus, Loader2, MessageSquare, Paperclip, Pencil, RotateCcw, Send, SendHorizontal, Trash2, Undo2, Upload, X } from 'lucide-react';
+import { comprimirImagem, nomeFotoCamera } from '@/lib/imagem';
+import { ArrowLeft, ArrowRight, Camera, CalendarClock, Check, Flag, CheckCircle2, Download, Eye, FileText, ImagePlus, Loader2, MessageSquare, Paperclip, Pencil, RotateCcw, Send, SendHorizontal, Trash2, Undo2, Upload, X } from 'lucide-react';
 import { api, arquivoParaBase64, baixarBase64, mensagemErro } from '@/lib/api';
 import type { DetalheNC as DetalheT, Etapa, NC } from '@/lib/types';
 import { cn, fmtData, fmtDataHora, hojeISO, iniciais } from '@/lib/utils';
@@ -59,8 +60,18 @@ function LinhaDoTempo({ nc }: { nc: NC }) {
             {p.atual && <span className="anim-ping absolute inset-0 rounded-full bg-brand" aria-hidden />}
             <span className="relative">{p.feito && !p.alerta ? <Check className="h-3.5 w-3.5" /> : p.alerta ? '!' : i + 1}</span>
           </motion.span>
-          <span className={cn('mt-2 text-[12px] font-medium', p.atual && 'text-brand')}>{p.rotulo}</span>
-          <span className="tabular text-[11px] text-muted">{p.data}</span>
+          <span className={cn('mt-2 text-[11px] font-medium sm:text-[12px]', p.atual && 'text-brand')}>{p.rotulo}</span>
+          <span className="tabular text-[10px] leading-tight text-muted sm:text-[11px]">
+            {/^\d{2}\/\d{2}\/\d{4}$/.test(p.data) ? (
+              <>
+                {p.data.slice(0, 6)}
+                <span className="hidden sm:inline">{p.data.slice(6)}</span>
+                <span className="sm:hidden">{p.data.slice(8)}</span>
+              </>
+            ) : (
+              p.data
+            )}
+          </span>
         </li>
       ))}
     </ol>
@@ -148,7 +159,64 @@ function EditarNC({ nc, aberto, fechar, salvar, salvando, erro }: { nc: NC; aber
 
 // ---------------------------------------------------------------- envio para verificação (com evidências)
 
-type DetalheCompleto = DetalheT & { podeEnviarVerificacao?: boolean; podeExcluirAnexo?: boolean };
+type Retomada = { de: string; para: string; motivo: string; autor: string; data: string };
+type Prorrogacao = { de: string; para: string; justificativa: string; autor: string; data: string };
+type DetalheCompleto = DetalheT & {
+  podeEnviarVerificacao?: boolean;
+  podeExcluirAnexo?: boolean;
+  retomada?: Retomada | null;
+  prorrogacao?: Prorrogacao | null;
+  podePedirProrrogacao?: boolean;
+  podeResponderProrrogacao?: boolean;
+  reporteArea?: ReporteArea | null;
+  podeReportarArea?: boolean;
+  podeResolverReporte?: boolean;
+};
+type ReporteArea = { area: string; motivo: string; sugestao: string; autor: string; data: string; meu: boolean };
+const brParaISO = (br: string) => {
+  const m = br.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : '';
+};
+const somarDias = (iso: string, n: number) => {
+  const [a, m, d] = iso.split('-').map(Number);
+  const x = new Date(a, m - 1, d + n);
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+};
+
+/** Aviso em destaque quando a NC voltou de etapa (reprovação, reabertura ou importação do Obrasoft). */
+function AvisoRetomada({ r }: { r: Retomada }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -12, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ type: 'spring', stiffness: 380, damping: 28, delay: 0.1 }}
+      className="relative mb-4 overflow-hidden rounded-2xl border border-warning/40 bg-warning/[0.07] p-4 sm:p-5"
+      role="status"
+    >
+      <span className="anim-varrer pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-warning/10 to-transparent" aria-hidden />
+      <div className="relative flex items-start gap-3">
+        <span className="relative mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full bg-warning/15 text-warning">
+          <span className="anim-ping absolute inset-0 rounded-full bg-warning/25" aria-hidden />
+          <Undo2 className="relative h-4 w-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-semibold">NC retomada</p>
+            <EtapaBadge etapa={r.de as Etapa} curto />
+            <ArrowRight className="h-3.5 w-3.5 text-muted" />
+            <EtapaBadge etapa={r.para as Etapa} curto />
+          </div>
+          <p className="mt-1.5 whitespace-pre-wrap text-[14px] leading-relaxed">
+            <span className="font-medium">Motivo:</span> {r.motivo}
+          </p>
+          <p className="mt-1 text-[12px] text-muted">
+            {r.autor} · {fmtDataHora(r.data)}
+          </p>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
 type Fase = 'form' | 'enviando' | 'sucesso';
 const MAX_ARQUIVO = 10 * 1024 * 1024;
 const MAX_TOTAL = 25 * 1024 * 1024;
@@ -159,6 +227,497 @@ function tamanho(b: number) {
 
 const PASSOS_ENVIO = ['Preparando as evidências', 'Enviando para o servidor', 'Atualizando a etapa'];
 
+type ArquivoSel = { file: File; url?: string };
+
+/** Seleção de evidências: arrastar/clicar, tirar foto pela câmera do celular, miniaturas. Fotos grandes são reduzidas. */
+function CampoEvidencias({ arquivos, setArquivos, obrigatorio, texto }: { arquivos: ArquivoSel[]; setArquivos: (f: (a: ArquivoSel[]) => ArquivoSel[]) => void; obrigatorio?: boolean; texto?: string }) {
+  const toast = useToast();
+  const input = useRef<HTMLInputElement>(null);
+  const camera = useRef<HTMLInputElement>(null);
+  const [arrastando, setArrastando] = useState(false);
+  const [preparando, setPreparando] = useState(0);
+  const contador = useRef(0);
+
+  async function adicionar(lista: FileList | null, daCamera = false) {
+    if (!lista || !lista.length) return;
+    const entrada = Array.from(lista);
+    setPreparando((n) => n + entrada.length);
+    const novos: ArquivoSel[] = [];
+    for (const original of entrada) {
+      let f = daCamera ? nomeFotoCamera(original, ++contador.current) : original;
+      f = await comprimirImagem(f);
+      setPreparando((n) => n - 1);
+      if (f.size > MAX_ARQUIVO) {
+        toast({ tipo: 'erro', titulo: 'Arquivo muito grande', descricao: `${f.name} passa de 10 MB.` });
+        continue;
+      }
+      novos.push({ file: f, url: f.type.startsWith('image/') ? URL.createObjectURL(f) : undefined });
+    }
+    setArquivos((a) => [...a, ...novos].slice(0, 10));
+  }
+
+  return (
+    <div className="space-y-3">
+              <input ref={input} type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" className="hidden" onChange={(e) => { void adicionar(e.target.files); e.target.value = ''; }} />
+              <input ref={camera} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { void adicionar(e.target.files, true); e.target.value = ''; }} />
+              <motion.button
+                type="button"
+                onClick={() => input.current?.click()}
+                onDragOver={(e) => { e.preventDefault(); setArrastando(true); }}
+                onDragLeave={() => setArrastando(false)}
+                onDrop={(e) => { e.preventDefault(); setArrastando(false); void adicionar(e.dataTransfer.files); }}
+                animate={{ scale: arrastando ? 1.02 : 1 }}
+                className={cn(
+                  'group flex w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-8 text-center transition-colors',
+                  arrastando ? 'border-brand bg-brand/[0.06]' : 'border-line hover:border-brand/50 hover:bg-brand/[0.03]',
+                  obrigatorio && arquivos.length === 0 && 'border-brand/40',
+                )}
+              >
+                <motion.span className="grid h-12 w-12 place-items-center rounded-full bg-brand/[0.08] text-brand" animate={{ y: [0, -4, 0] }} transition={{ duration: 2.4, repeat: Infinity }}>
+                  <ImagePlus className="h-5 w-5" />
+                </motion.span>
+                <p className="mt-3 text-[14px] font-semibold">{texto ?? 'Clique ou arraste as fotos e documentos'}</p>
+                <p className="mt-1 text-[12px] text-muted">
+                  {obrigatorio ? 'Obrigatório: ao menos 1 evidência · ' : ''}até 10 arquivos, 10 MB cada, 25 MB no total
+                </p>
+              </motion.button>
+
+              {arquivos.length > 0 && (
+                <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  <AnimatePresence initial={false}>
+                    {arquivos.map((a, i) => (
+                      <motion.li
+                        key={a.file.name + a.file.size + i}
+                        layout
+                        initial={{ opacity: 0, scale: 0.85, y: 8 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.85 }}
+                        transition={{ type: 'spring', stiffness: 420, damping: 28 }}
+                        className="group relative overflow-hidden rounded-xl border border-line bg-elevated"
+                      >
+                        {a.url ? (
+                          <img src={a.url} alt={a.file.name} className="h-24 w-full object-cover" />
+                        ) : (
+                          <div className="grid h-24 place-items-center text-muted">
+                            <FileText className="h-7 w-7" />
+                          </div>
+                        )}
+                        <div className="px-2 py-1.5">
+                          <p className="truncate text-[12px] font-medium">{a.file.name}</p>
+                          <p className="text-[11px] text-muted">{tamanho(a.file.size)}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setArquivos((l) => l.filter((_, j) => j !== i))}
+                          className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full bg-black/55 text-white opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
+                          aria-label={`Remover ${a.file.name}`}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </motion.li>
+                    ))}
+                  </AnimatePresence>
+                </ul>
+              )}
+      <div className="flex flex-wrap items-center gap-2">
+        <motion.div whileTap={{ scale: 0.95 }} className="flex-1 sm:flex-none">
+          <Button type="button" variant="secondary" size="sm" className="w-full" onClick={() => camera.current?.click()}>
+            <Camera className="h-4 w-4" /> Tirar foto
+          </Button>
+        </motion.div>
+        <AnimatePresence>
+          {preparando > 0 && (
+            <motion.span initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} className="flex items-center gap-1.5 text-[12px] text-muted">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Preparando {preparando} foto(s)…
+            </motion.span>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
+
+/** Responsável pede mais prazo: a NC vai para verificação com a justificativa (volta ao verificador). */
+function PedirProrrogacao({ nc, onConcluido }: { nc: NC; onConcluido: (d: DetalheCompleto) => void }) {
+  const toast = useToast();
+  const [aberto, setAberto] = useState(false);
+  const [fase, setFase] = useState<Fase>('form');
+  const [arquivos, setArquivos] = useState<ArquivoSel[]>([]);
+  const prazoAtual = nc.prazo ? nc.prazo.slice(0, 10) : '';
+  const minimo = [somarDias(hojeISO(), 1), prazoAtual ? somarDias(prazoAtual, 1) : ''].sort().pop() as string;
+  const [data, setData] = useState('');
+  const [just, setJust] = useState('');
+  const resultado = useRef<DetalheCompleto | null>(null);
+  const dias = data && prazoAtual ? Math.round((new Date(data).getTime() - new Date(prazoAtual).getTime()) / 864e5) : 0;
+  const total = arquivos.reduce((t, a) => t + a.file.size, 0);
+
+  function abrir() {
+    setFase('form');
+    setArquivos([]);
+    setData(somarDias(minimo, 14));
+    setJust('');
+    setAberto(true);
+  }
+  function fechar() {
+    if (fase === 'enviando') return;
+    setAberto(false);
+    arquivos.forEach((a) => a.url && URL.revokeObjectURL(a.url));
+    if (fase === 'sucesso' && resultado.current) onConcluido(resultado.current);
+  }
+  async function enviar() {
+    setFase('enviando');
+    try {
+      const lista = [];
+      for (const a of arquivos) lista.push({ nome: a.file.name, mimeType: a.file.type || 'application/octet-stream', base64: await arquivoParaBase64(a.file) });
+      const d = await api<DetalheCompleto>('pedirProrrogacao', { nc_id: nc.nc_id, novo_prazo: data, justificativa: just.trim(), arquivos: lista });
+      resultado.current = d;
+      setFase('sucesso');
+      setTimeout(() => {
+        setAberto(false);
+        onConcluido(d);
+      }, 2600);
+    } catch (e) {
+      setFase('form');
+      toast({ tipo: 'erro', titulo: 'Não foi possível enviar o pedido', descricao: mensagemErro(e) });
+    }
+  }
+  const valido = !!data && data >= minimo && just.trim().length >= 10 && total <= MAX_TOTAL;
+
+  return (
+    <>
+      <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+        <Button size="sm" variant="secondary" onClick={abrir}>
+          <CalendarClock className="h-4 w-4" /> Pedir prorrogação
+        </Button>
+      </motion.div>
+      <Dialog
+        open={aberto}
+        onClose={fechar}
+        size="md"
+        title={fase === 'sucesso' ? 'Pedido enviado!' : `Pedir prorrogação de prazo · NC ${nc.nc_id}`}
+        description={fase === 'form' ? 'O pedido vai junto com a NC para verificação, para ser avaliado pelo verificador. A NC fica “Em verificação c/ Comgás” até a resposta.' : undefined}
+        footer={
+          fase === 'form' ? (
+            <>
+              <Button variant="secondary" onClick={fechar}>
+                Cancelar
+              </Button>
+              <Button variant="brand" disabled={!valido} onClick={enviar}>
+                <CalendarClock className="h-4 w-4" /> Enviar pedido
+              </Button>
+            </>
+          ) : fase === 'sucesso' ? (
+            <Button onClick={fechar}>Fechar</Button>
+          ) : undefined
+        }
+      >
+        <AnimatePresence mode="wait" initial={false}>
+          {fase === 'form' && (
+            <motion.div key="form" initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }} className="space-y-4">
+              <div className="grid items-end gap-3 sm:grid-cols-[1fr_auto_1fr]">
+                <div className="rounded-2xl bg-elevated p-3">
+                  <p className="text-[12px] text-muted">Prazo atual</p>
+                  <p className="tabular mt-0.5 text-[18px] font-semibold">{fmtData(nc.prazo)}</p>
+                </div>
+                <motion.div className="hidden pb-4 text-muted sm:block" animate={{ x: [0, 4, 0] }} transition={{ duration: 1.6, repeat: Infinity }}>
+                  <ArrowRight className="h-5 w-5" />
+                </motion.div>
+                <Field label="Novo prazo pedido">
+                  <Input type="date" value={data} min={minimo} onChange={(e) => setData(e.target.value)} />
+                </Field>
+              </div>
+              <AnimatePresence>
+                {dias > 0 && (
+                  <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="text-[13px] text-muted">
+                    Mais <b className="text-fg">{dias} dia(s)</b> de prazo.
+                  </motion.p>
+                )}
+              </AnimatePresence>
+              <Field label="Justificativa (obrigatória)" hint="Ex.: aguardando licença da prefeitura, falta de material, condições climáticas.">
+                <Textarea value={just} onChange={(e) => setJust(e.target.value)} rows={3} maxLength={3000} placeholder="Explique por que o prazo precisa ser prorrogado" />
+              </Field>
+              <CampoEvidencias arquivos={arquivos} setArquivos={setArquivos} texto="Documentos de apoio (opcional): fotos, ofícios, protocolos" />
+              {total > MAX_TOTAL && <Aviso>O total passa de 25 MB. Remova algum arquivo.</Aviso>}
+            </motion.div>
+          )}
+          {fase === 'enviando' && (
+            <motion.div key="env" initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} className="py-8 text-center">
+              <motion.div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-info/10 text-info" animate={{ rotate: [0, -12, 12, -6, 0], scale: [1, 1.08, 1] }} transition={{ duration: 1.4, repeat: Infinity }}>
+                <CalendarClock className="h-8 w-8" />
+              </motion.div>
+              <p className="mt-4 font-semibold">Enviando o pedido…</p>
+              <p className="text-[13px] text-muted">{arquivos.length ? `com ${arquivos.length} anexo(s)` : 'registrando a justificativa'}</p>
+            </motion.div>
+          )}
+          {fase === 'sucesso' && (
+            <motion.div key="ok" initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} className="py-4 text-center">
+              <SucessoAnimado />
+              <motion.p className="mt-4 text-[20px] font-bold tracking-tight" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }}>
+                Prorrogação pedida
+              </motion.p>
+              <motion.p className="mx-auto mt-1 max-w-sm text-[14px] text-muted" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.85 }}>
+                Novo prazo pedido: <b>{fmtData(data)}</b>. A NC foi para verificação e o administrador foi avisado por e-mail.
+              </motion.p>
+              <motion.div className="mt-4 inline-flex items-center gap-2" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1 }}>
+                <EtapaBadge etapa="EXECUÇÃO" curto />
+                <ArrowRight className="h-4 w-4 text-muted" />
+                <motion.span initial={{ scale: 0.6 }} animate={{ scale: [0.6, 1.15, 1] }} transition={{ delay: 1.1, duration: 0.5 }}>
+                  <EtapaBadge etapa="VERIFICAÇÃO" curto />
+                </motion.span>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </Dialog>
+    </>
+  );
+}
+
+/** Aviso do pedido de prorrogação pendente; o admin registra a resposta do verificador. */
+function AvisoProrrogacao({ nc, p, podeResponder, onRespondido }: { nc: NC; p: Prorrogacao; podeResponder: boolean; onRespondido: (d: DetalheCompleto, aprovada: boolean) => void }) {
+  const toast = useToast();
+  const [modo, setModo] = useState<'aprovar' | 'recusar' | null>(null);
+  const [data, setData] = useState(brParaISO(p.para));
+  const [obs, setObs] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  async function responder() {
+    if (!modo) return;
+    setSalvando(true);
+    try {
+      const d = await api<DetalheCompleto>('responderProrrogacao', { nc_id: nc.nc_id, decisao: modo, novo_prazo: modo === 'aprovar' ? data : undefined, observacao: obs.trim() || undefined });
+      setModo(null);
+      onRespondido(d, modo === 'aprovar');
+    } catch (e) {
+      toast({ tipo: 'erro', titulo: 'Não foi possível registrar', descricao: mensagemErro(e) });
+    } finally {
+      setSalvando(false);
+    }
+  }
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -12, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ type: 'spring', stiffness: 380, damping: 28, delay: 0.1 }}
+      className="relative mb-4 overflow-hidden rounded-2xl border border-info/40 bg-info/[0.07] p-4 sm:p-5"
+      role="status"
+    >
+      <span className="anim-varrer pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-info/10 to-transparent" aria-hidden />
+      <div className="relative flex flex-wrap items-start gap-3">
+        <span className="relative mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full bg-info/15 text-info">
+          <span className="anim-ping absolute inset-0 rounded-full bg-info/25" aria-hidden />
+          <CalendarClock className="relative h-4 w-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-semibold">Prorrogação de prazo aguardando resposta</p>
+            <span className="tabular rounded-full bg-card px-2.5 py-0.5 text-[12px]">
+              {p.de} <ArrowRight className="mx-0.5 inline h-3 w-3" /> <b>{p.para}</b>
+            </span>
+          </div>
+          <p className="mt-1.5 whitespace-pre-wrap text-[14px] leading-relaxed">
+            <span className="font-medium">Justificativa:</span> {p.justificativa}
+          </p>
+          <p className="mt-1 text-[12px] text-muted">
+            Pedido por {p.autor} · {fmtDataHora(p.data)}
+            {nc.verificador ? ` · verificador: ${nc.verificador}` : ''}
+          </p>
+        </div>
+        {podeResponder && !modo && (
+          <div className="flex gap-2">
+            <Button size="sm" variant="secondary" onClick={() => setModo('recusar')}>
+              <X className="h-4 w-4" /> Recusada
+            </Button>
+            <Button size="sm" onClick={() => setModo('aprovar')}>
+              <Check className="h-4 w-4" /> Aprovada
+            </Button>
+          </div>
+        )}
+      </div>
+      <AnimatePresence initial={false}>
+        {modo && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="relative overflow-hidden">
+            <div className="mt-4 grid gap-3 rounded-xl border border-line bg-card p-3 sm:grid-cols-[180px_1fr_auto] sm:items-end">
+              {modo === 'aprovar' ? (
+                <Field label="Prazo aprovado">
+                  <Input type="date" value={data} onChange={(e) => setData(e.target.value)} />
+                </Field>
+              ) : (
+                <div className="text-[13px] text-muted sm:pb-2">O prazo continua {p.de}.</div>
+              )}
+              <Field label={modo === 'aprovar' ? 'Observação (opcional)' : 'Motivo da recusa (obrigatório)'}>
+                <Input value={obs} onChange={(e) => setObs(e.target.value)} placeholder={modo === 'aprovar' ? 'Ex.: aprovado pelo verificador em reunião' : 'Ex.: verificador não aceitou a justificativa'} />
+              </Field>
+              <div className="flex gap-2">
+                <Button size="sm" variant="secondary" onClick={() => setModo(null)} disabled={salvando}>
+                  Cancelar
+                </Button>
+                <Button size="sm" variant={modo === 'aprovar' ? 'brand' : 'primary'} loading={salvando} disabled={modo === 'recusar' ? !obs.trim() : !data} onClick={responder}>
+                  Confirmar
+                </Button>
+              </div>
+            </div>
+            <p className="mt-2 text-[12px] text-muted">Nos dois casos a NC volta para execução e o responsável recebe um e-mail.</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+/** Responsável avisa que a NC não é da área dele. */
+function ReportarArea({ nc, onConcluido }: { nc: NC; onConcluido: (d: DetalheCompleto) => void }) {
+  const toast = useToast();
+  const [aberto, setAberto] = useState(false);
+  const [motivo, setMotivo] = useState('');
+  const [sugestao, setSugestao] = useState('');
+  const [enviando, setEnviando] = useState(false);
+  async function enviar() {
+    setEnviando(true);
+    try {
+      const d = await api<DetalheCompleto>('reportarArea', { nc_id: nc.nc_id, motivo: motivo.trim(), sugestao: sugestao.trim() || undefined });
+      setAberto(false);
+      onConcluido(d);
+    } catch (e) {
+      toast({ tipo: 'erro', titulo: 'Não foi possível reportar', descricao: mensagemErro(e) });
+    } finally {
+      setEnviando(false);
+    }
+  }
+  return (
+    <>
+      <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+        <Button size="sm" variant="ghost" onClick={() => { setMotivo(''); setSugestao(''); setAberto(true); }} className="text-muted hover:text-fg">
+          <Flag className="h-4 w-4" /> Não é da minha área
+        </Button>
+      </motion.div>
+      <Dialog
+        open={aberto}
+        onClose={() => !enviando && setAberto(false)}
+        size="sm"
+        title={`Reportar área incorreta · NC ${nc.nc_id}`}
+        description={`A NC está na área “${nc.area}”. Os administradores recebem um e-mail para corrigir o responsável. Até lá, ela continua com você.`}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setAberto(false)} disabled={enviando}>
+              Cancelar
+            </Button>
+            <Button variant="brand" onClick={enviar} loading={enviando} disabled={motivo.trim().length < 5}>
+              <Flag className="h-4 w-4" /> Enviar reporte
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Field label="Por que esta NC não é da sua área? (obrigatório)">
+            <Textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={3} maxLength={2000} placeholder="Ex.: é serviço de ramal, não de recomposição" autoFocus />
+          </Field>
+          <Field label="Área correta, se souber (opcional)">
+            <Input value={sugestao} onChange={(e) => setSugestao(e.target.value)} maxLength={120} placeholder="Ex.: Casas/Ramal" />
+          </Field>
+        </div>
+      </Dialog>
+    </>
+  );
+}
+
+/** Aviso de área contestada; o admin altera a área ou mantém com justificativa. */
+function AvisoReporteArea({ nc, r, podeResolver, onResolvido }: { nc: NC; r: ReporteArea; podeResolver: boolean; onResolvido: (d: DetalheCompleto, msg: string) => void }) {
+  const toast = useToast();
+  const { data: op } = useOpcoesFiltro();
+  const [modo, setModo] = useState<'alterar' | 'manter' | null>(null);
+  const sugerida = op?.areas.find((a) => a.toLowerCase() === r.sugestao.toLowerCase()) ?? '';
+  const [area, setArea] = useState('');
+  const [obs, setObs] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  async function resolver() {
+    if (!modo) return;
+    setSalvando(true);
+    try {
+      const d = await api<DetalheCompleto>('resolverReporteArea', { nc_id: nc.nc_id, acao: modo, area: modo === 'alterar' ? area : undefined, observacao: obs.trim() || undefined });
+      onResolvido(d, modo === 'alterar' ? `NC ${nc.nc_id} agora é da área “${area}”.` : `NC ${nc.nc_id} continua em “${nc.area}”.`);
+    } catch (e) {
+      toast({ tipo: 'erro', titulo: 'Não foi possível salvar', descricao: mensagemErro(e) });
+    } finally {
+      setSalvando(false);
+    }
+  }
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -12, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ type: 'spring', stiffness: 380, damping: 28, delay: 0.1 }}
+      className="relative mb-4 overflow-hidden rounded-2xl border border-[#8B5CF6]/40 bg-[#8B5CF6]/[0.07] p-4 sm:p-5"
+      role="status"
+    >
+      <span className="anim-varrer pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-[#8B5CF6]/10 to-transparent" aria-hidden />
+      <div className="relative flex flex-wrap items-start gap-3">
+        <span className="relative mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#8B5CF6]/15 text-[#8B5CF6]">
+          <span className="anim-ping absolute inset-0 rounded-full bg-[#8B5CF6]/25" aria-hidden />
+          <Flag className="relative h-4 w-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold">{r.meu ? 'Você informou que esta NC não é da sua área' : `Área contestada: “${r.area}”`}</p>
+          <p className="mt-1.5 whitespace-pre-wrap text-[14px] leading-relaxed">
+            <span className="font-medium">Motivo:</span> {r.motivo}
+            {r.sugestao && (
+              <>
+                <br />
+                <span className="font-medium">Área sugerida:</span> {r.sugestao}
+              </>
+            )}
+          </p>
+          <p className="mt-1 text-[12px] text-muted">
+            {r.meu ? 'Aguardando o administrador · ' : `Reportado por ${r.autor} · `}
+            {fmtDataHora(r.data)}
+          </p>
+        </div>
+        {podeResolver && !modo && (
+          <div className="flex gap-2">
+            <Button size="sm" variant="secondary" onClick={() => { setObs(''); setModo('manter'); }}>
+              Manter área
+            </Button>
+            <Button size="sm" onClick={() => { setArea(sugerida); setObs(''); setModo('alterar'); }}>
+              <ArrowRight className="h-4 w-4" /> Alterar responsável
+            </Button>
+          </div>
+        )}
+      </div>
+      <AnimatePresence initial={false}>
+        {modo && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="relative overflow-hidden">
+            <div className="mt-4 grid gap-3 rounded-xl border border-line bg-card p-3 sm:grid-cols-[220px_1fr_auto] sm:items-end">
+              {modo === 'alterar' ? (
+                <Field label="Nova área responsável">
+                  <Select value={area} onChange={(e) => setArea(e.target.value)}>
+                    <option value="">Escolha…</option>
+                    {op?.areas.filter((a) => a !== 'A classificar' && a !== nc.area).map((a) => <option key={a}>{a}</option>)}
+                  </Select>
+                </Field>
+              ) : (
+                <div className="text-[13px] text-muted sm:pb-2">A NC continua em “{nc.area}”.</div>
+              )}
+              <Field label={modo === 'alterar' ? 'Observação (opcional)' : 'Justificativa (obrigatória)'}>
+                <Input value={obs} onChange={(e) => setObs(e.target.value)} placeholder={modo === 'alterar' ? 'Ex.: corrigido conforme o tipo de serviço' : 'Ex.: endereço pertence ao contrato desta área'} />
+              </Field>
+              <div className="flex gap-2">
+                <Button size="sm" variant="secondary" onClick={() => setModo(null)} disabled={salvando}>
+                  Cancelar
+                </Button>
+                <Button size="sm" variant="brand" loading={salvando} disabled={modo === 'alterar' ? !area : !obs.trim()} onClick={resolver}>
+                  Confirmar
+                </Button>
+              </div>
+            </div>
+            <p className="mt-2 text-[12px] text-muted">
+              {modo === 'alterar' ? 'Os responsáveis da nova área passam a ver a NC e recebem um e-mail; quem reportou também é avisado.' : 'Quem reportou recebe a justificativa por e-mail.'}
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
 function EnviarVerificacao({ nc, exigeEvidencia, onConcluido }: { nc: NC; exigeEvidencia: boolean; onConcluido: (d: DetalheCompleto) => void }) {
   const toast = useToast();
   const [aberto, setAberto] = useState(false);
@@ -167,20 +726,8 @@ function EnviarVerificacao({ nc, exigeEvidencia, onConcluido }: { nc: NC; exigeE
   const [data, setData] = useState(hojeISO());
   const [obs, setObs] = useState('');
   const [passo, setPasso] = useState(0);
-  const [arrastando, setArrastando] = useState(false);
-  const input = useRef<HTMLInputElement>(null);
   const resultado = useRef<DetalheCompleto | null>(null);
   const total = arquivos.reduce((t, a) => t + a.file.size, 0);
-
-  function adicionar(lista: FileList | null) {
-    if (!lista) return;
-    const novos: { file: File; url?: string }[] = [];
-    Array.from(lista).forEach((f) => {
-      if (f.size > MAX_ARQUIVO) return toast({ tipo: 'erro', titulo: 'Arquivo muito grande', descricao: `${f.name} passa de 10 MB.` });
-      novos.push({ file: f, url: f.type.startsWith('image/') ? URL.createObjectURL(f) : undefined });
-    });
-    setArquivos((a) => [...a, ...novos].slice(0, 10));
-  }
 
   function abrir() {
     setFase('form');
@@ -257,66 +804,7 @@ function EnviarVerificacao({ nc, exigeEvidencia, onConcluido }: { nc: NC; exigeE
         <AnimatePresence mode="wait" initial={false}>
           {fase === 'form' && (
             <motion.div key="form" initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }} className="space-y-4">
-              <input ref={input} type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" className="hidden" onChange={(e) => { adicionar(e.target.files); e.target.value = ''; }} />
-              <motion.button
-                type="button"
-                onClick={() => input.current?.click()}
-                onDragOver={(e) => { e.preventDefault(); setArrastando(true); }}
-                onDragLeave={() => setArrastando(false)}
-                onDrop={(e) => { e.preventDefault(); setArrastando(false); adicionar(e.dataTransfer.files); }}
-                animate={{ scale: arrastando ? 1.02 : 1 }}
-                className={cn(
-                  'group flex w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-8 text-center transition-colors',
-                  arrastando ? 'border-brand bg-brand/[0.06]' : 'border-line hover:border-brand/50 hover:bg-brand/[0.03]',
-                  exigeEvidencia && arquivos.length === 0 && 'border-brand/40',
-                )}
-              >
-                <motion.span className="grid h-12 w-12 place-items-center rounded-full bg-brand/[0.08] text-brand" animate={{ y: [0, -4, 0] }} transition={{ duration: 2.4, repeat: Infinity }}>
-                  <ImagePlus className="h-5 w-5" />
-                </motion.span>
-                <p className="mt-3 text-[14px] font-semibold">Clique ou arraste as fotos e documentos</p>
-                <p className="mt-1 text-[12px] text-muted">
-                  {exigeEvidencia ? 'Obrigatório: ao menos 1 evidência · ' : ''}até 10 arquivos, 10 MB cada, 25 MB no total
-                </p>
-              </motion.button>
-
-              {arquivos.length > 0 && (
-                <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  <AnimatePresence initial={false}>
-                    {arquivos.map((a, i) => (
-                      <motion.li
-                        key={a.file.name + a.file.size + i}
-                        layout
-                        initial={{ opacity: 0, scale: 0.85, y: 8 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.85 }}
-                        transition={{ type: 'spring', stiffness: 420, damping: 28 }}
-                        className="group relative overflow-hidden rounded-xl border border-line bg-elevated"
-                      >
-                        {a.url ? (
-                          <img src={a.url} alt={a.file.name} className="h-24 w-full object-cover" />
-                        ) : (
-                          <div className="grid h-24 place-items-center text-muted">
-                            <FileText className="h-7 w-7" />
-                          </div>
-                        )}
-                        <div className="px-2 py-1.5">
-                          <p className="truncate text-[12px] font-medium">{a.file.name}</p>
-                          <p className="text-[11px] text-muted">{tamanho(a.file.size)}</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setArquivos((l) => l.filter((_, j) => j !== i))}
-                          className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full bg-black/55 text-white opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
-                          aria-label={`Remover ${a.file.name}`}
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </motion.li>
-                    ))}
-                  </AnimatePresence>
-                </ul>
-              )}
+              <CampoEvidencias arquivos={arquivos} setArquivos={setArquivos} obrigatorio={exigeEvidencia} />
               {total > MAX_TOTAL && <Aviso>O total passa de 25 MB. Remova algum arquivo ou envie parte pelo botão Anexar.</Aviso>}
 
               <div className="grid gap-4 sm:grid-cols-[180px_1fr]">
@@ -499,6 +987,7 @@ export default function DetalheNC() {
     qc.invalidateQueries({ queryKey: ['ncs'] });
     qc.invalidateQueries({ queryKey: ['dashboard'] });
     qc.invalidateQueries({ queryKey: ['alertas'] });
+    qc.invalidateQueries({ queryKey: ['pendencias'] });
   };
 
   const atualizar = useMutation({
@@ -566,7 +1055,7 @@ export default function DetalheNC() {
       </Card>
     );
 
-  const { nc, comentarios, anexos, historico, podeEditarTudo, podeEditarPlano, podeEnviarVerificacao, podeExcluirAnexo } = q.data;
+  const { nc, comentarios, anexos, historico, podeEditarTudo, podeEditarPlano, podeEnviarVerificacao, podeExcluirAnexo, retomada, prorrogacao, podePedirProrrogacao, podeResponderProrrogacao, reporteArea, podeReportarArea, podeResolverReporte } = q.data;
 
   return (
     <div>
@@ -597,6 +1086,37 @@ export default function DetalheNC() {
         <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" /> Voltar para a lista
       </Link>
 
+      {retomada && <AvisoRetomada key={retomada.data} r={retomada} />}
+      {reporteArea && (
+        <AvisoReporteArea
+          key={reporteArea.data}
+          nc={nc}
+          r={reporteArea}
+          podeResolver={!!podeResolverReporte}
+          onResolvido={(d, msg) => {
+            qc.setQueryData(chave, d);
+            invalidarListas();
+            qc.invalidateQueries({ queryKey: ['opcoesFiltro'] });
+            setAba('comentarios');
+            toast({ tipo: 'sucesso', titulo: 'Reporte resolvido', descricao: msg });
+          }}
+        />
+      )}
+      {prorrogacao && (
+        <AvisoProrrogacao
+          key={prorrogacao.data}
+          nc={nc}
+          p={prorrogacao}
+          podeResponder={!!podeResponderProrrogacao}
+          onRespondido={(d, aprovada) => {
+            qc.setQueryData(chave, d);
+            invalidarListas();
+            setAba('comentarios');
+            toast({ tipo: 'sucesso', titulo: aprovada ? 'Prorrogação aprovada' : 'Prorrogação recusada', descricao: `NC ${nc.nc_id} voltou para execução${aprovada ? ` com prazo ${fmtData(d.nc.prazo)}` : ''}.` });
+          }}
+        />
+      )}
+
       <Card className="anim-fade-up p-5 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
@@ -626,9 +1146,31 @@ export default function DetalheNC() {
                 }}
               />
             )}
+            {podeReportarArea && (
+              <ReportarArea
+                nc={nc}
+                onConcluido={(d) => {
+                  qc.setQueryData(chave, d);
+                  qc.invalidateQueries({ queryKey: ['pendencias'] });
+                  setAba('comentarios');
+                  toast({ tipo: 'sucesso', titulo: 'Reporte enviado', descricao: 'Os administradores foram avisados por e-mail.' });
+                }}
+              />
+            )}
+            {podePedirProrrogacao && (
+              <PedirProrrogacao
+                nc={nc}
+                onConcluido={(d) => {
+                  qc.setQueryData(chave, d);
+                  invalidarListas();
+                  setAba('comentarios');
+                  toast({ tipo: 'sucesso', titulo: 'Prorrogação pedida', descricao: `NC ${nc.nc_id} foi para verificação com o pedido.` });
+                }}
+              />
+            )}
             {podeEditarTudo && (
               <>
-                <FluxoEtapa
+                {!prorrogacao && <FluxoEtapa
                   nc={nc}
                   onFeito={(d, a) => {
                     qc.setQueryData(chave, d);
@@ -636,7 +1178,7 @@ export default function DetalheNC() {
                     setAba('comentarios');
                     toast({ tipo: 'sucesso', titulo: a.titulo, descricao: `NC ${nc.nc_id} agora está em “${a.destino === 'EXECUÇÃO' ? 'Em execução c/ Unigás' : a.destino === 'VERIFICAÇÃO' ? 'Em verificação c/ Comgás' : 'Finalizado'}”.` });
                   }}
-                />
+                />}
                 <Button variant="secondary" size="sm" onClick={() => { setErro(null); setEditar(true); }}>
                   <Pencil className="h-3.5 w-3.5" /> Editar
                 </Button>
@@ -741,7 +1283,13 @@ export default function DetalheNC() {
                   </p>
                   <p className="mt-0.5 text-[13px]">
                     <span className="font-medium">{h.campo_rotulo}</span>
-                    {h.campo === 'plano_acao' ? ' atualizado' : (
+                    {h.campo === 'plano_acao' ? ' atualizado' : ['retomada', 'prorrogacao', 'prorrogacao_resposta', 'area_reportada', 'area_reportada_resposta'].includes(h.campo) ? (
+                      <>
+                        {': '}
+                        <span className="font-medium">{h.valor_antigo}</span>
+                        {h.valor_novo && <span className="text-muted"> — {h.valor_novo}</span>}
+                      </>
+                    ) : (
                       <>
                         {': '}
                         {h.valor_antigo && <span className="text-muted line-through">{h.valor_antigo}</span>} {h.valor_antigo && '→ '}

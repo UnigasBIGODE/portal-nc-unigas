@@ -8,6 +8,9 @@ import { ToastProvider } from './components/Toast';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { MODO_DEMO, type ApiError } from './lib/api';
+import { iniciarPwa } from './lib/pwa';
+
+iniciarPwa();
 
 // Na demonstração (publicada dentro do claude.ai) a navegação fica em memória.
 const Router = MODO_DEMO ? MemoryRouter : HashRouter;

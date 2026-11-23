@@ -5,6 +5,7 @@ import {
   ClipboardList,
   FileSpreadsheet,
   History,
+  ListTodo,
   LayoutDashboard,
   SlidersHorizontal,
   Tags,
@@ -25,6 +26,7 @@ export const MENU: ItemNav[] = [
 ];
 
 export const ADMIN: ItemNav[] = [
+  { to: '/admin/pendencias', label: 'Pendências', icon: ListTodo },
   { to: '/admin/importar', label: 'Importar dados', icon: Upload },
   { to: '/admin/classificacao', label: 'Classificação', icon: Tags },
   { to: '/admin/usuarios', label: 'Usuários', icon: Users },

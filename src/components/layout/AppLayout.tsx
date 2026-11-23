@@ -2,13 +2,16 @@ import { Component, Suspense, useEffect, useRef, useState, type ReactNode } from
 import { Link, NavLink, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { useIsFetching } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowUp, Bell, ChevronRight, ChevronsLeft, LifeBuoy, LogOut, Menu, Moon, Search, ShieldCheck, Sun, X } from 'lucide-react';
+import { ArrowUp, Bell, ChevronRight, ChevronsLeft, LifeBuoy, LogOut, Menu, Moon, Search, ShieldCheck, Smartphone, Sun, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { useInstalarApp } from '@/lib/pwa';
+import { useToast } from '@/components/Toast';
 import { useTheme } from '@/context/ThemeContext';
 import { useAlertas } from '@/hooks/queries';
+import { totalPendencias, usePendencias } from '@/pages/admin/Pendencias';
 import { Logo } from '../Logo';
 import { AlertaBadge } from '../StatusBadges';
-import { Badge, Button, Skeleton } from '../ui';
+import { Badge, Button, Dialog, Skeleton } from '../ui';
 import { cn, iniciais } from '@/lib/utils';
 import { ADMIN, CONTA, MENU, trilha, type ItemNav } from './navegacao';
 import { CommandPalette } from './CommandPalette';
@@ -79,11 +82,48 @@ function ItemMenu({ item, recolhido, badge, indice }: { item: ItemNav; recolhido
   );
 }
 
+// ---------------------------------------------------------------- instalar app
+
+function BotaoInstalar({ recolhido }: { recolhido: boolean }) {
+  const { podeInstalar, precisaInstrucoesIOS, instalar } = useInstalarApp();
+  const toast = useToast();
+  const [ios, setIos] = useState(false);
+  if (!podeInstalar && !precisaInstrucoesIOS) return null;
+  return (
+    <>
+      <motion.button
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        whileTap={{ scale: 0.97 }}
+        onClick={async (e) => {
+          e.stopPropagation();
+          if (podeInstalar) {
+            if (await instalar()) toast({ tipo: 'sucesso', titulo: 'App instalado', descricao: 'Abra o Portal NC direto pela tela inicial.' });
+          } else setIos(true);
+        }}
+        title={recolhido ? 'Instalar app' : undefined}
+        className={cn('relative flex h-10 w-full items-center gap-3 overflow-hidden rounded-xl bg-brand/[0.07] px-3 text-[14px] font-semibold text-brand transition-colors hover:bg-brand/[0.12]', recolhido && 'justify-center px-0')}
+      >
+        <motion.span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent" initial={{ x: '-100%' }} animate={{ x: '100%' }} transition={{ duration: 1.8, repeat: Infinity, repeatDelay: 4 }} aria-hidden />
+        <Smartphone className="relative h-[18px] w-[18px]" aria-hidden /> {!recolhido && <span className="relative">Instalar app</span>}
+      </motion.button>
+      <Dialog open={ios} onClose={() => setIos(false)} size="sm" title="Instalar no iPhone / iPad" footer={<Button onClick={() => setIos(false)}>Entendi</Button>}>
+        <ol className="space-y-3 text-[14px]">
+          <li className="flex gap-3"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand text-[12px] font-bold text-white">1</span> Abra o portal no <b>Safari</b>.</li>
+          <li className="flex gap-3"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand text-[12px] font-bold text-white">2</span> Toque em <b>Compartilhar</b> (o quadrado com a seta para cima).</li>
+          <li className="flex gap-3"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand text-[12px] font-bold text-white">3</span> Escolha <b>Adicionar à Tela de Início</b> e confirme.</li>
+        </ol>
+      </Dialog>
+    </>
+  );
+}
+
 // ---------------------------------------------------------------- sidebar
 
 function Sidebar({ aberto, fechar, recolhido, alternarRecolhido }: { aberto: boolean; fechar: () => void; recolhido: boolean; alternarRecolhido: () => void }) {
   const { usuario, isAdmin, logout, config } = useAuth();
   const { data: alertas } = useAlertas();
+  const { data: pend } = usePendencias(isAdmin);
   const navigate = useNavigate();
   const [desktop, setDesktop] = useState(() => window.matchMedia('(min-width: 1024px)').matches);
   useEffect(() => {
@@ -165,7 +205,7 @@ function Sidebar({ aberto, fechar, recolhido, alternarRecolhido }: { aberto: boo
               {!r ? <p className="label-xs mb-2 mt-6 px-3">Administração</p> : <div className="mx-auto my-4 h-px w-6 bg-line" />}
               <div className="space-y-0.5">
                 {ADMIN.map((m, i) => (
-                  <ItemMenu key={m.to} item={m} indice={MENU.length + i} recolhido={r} />
+                  <ItemMenu key={m.to} item={m} indice={MENU.length + i} recolhido={r} badge={m.to === '/admin/pendencias' ? totalPendencias(pend) : undefined} />
                 ))}
               </div>
             </>
@@ -173,6 +213,7 @@ function Sidebar({ aberto, fechar, recolhido, alternarRecolhido }: { aberto: boo
         </nav>
 
         <div className={cn('space-y-0.5 border-t border-line px-4 py-3', r && 'px-3')} onClick={() => !desktop && fechar()}>
+          <BotaoInstalar recolhido={r} />
           <ItemMenu item={CONTA} indice={20} recolhido={r} />
           <a
             href={config?.emailSuporte ? `mailto:${config.emailSuporte}?subject=Portal%20de%20NCs` : '#'}

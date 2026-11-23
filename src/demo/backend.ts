@@ -18,7 +18,7 @@ export function loginsDemo() {
 function inicializar() {
   if (!estaVazio()) return;
   gas.setup();
-  gas.gerarDadosExemplo(80);
+  if (import.meta.env.VITE_DEMO_SEM_EXEMPLO !== '1') gas.gerarDadosExemplo(80);
   gas.resetMemo();
   gas.definirSenhaPorEmail_('admin@unigas.demo', 'Admin1234');
   loginsDemo().slice(1).map((l) => l.email).forEach((e) => {

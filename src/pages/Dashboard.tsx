@@ -31,6 +31,34 @@ function saudacao() {
   return h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite';
 }
 
+/** Frase que aparece palavra por palavra. */
+function Frase({ partes, className }: { partes: { t: string; cls?: string }[]; className?: string }) {
+  let n = 0;
+  return (
+    <p className={className} aria-label={partes.map((p) => p.t).join('')}>
+      {partes.map((p, i) => (
+        <span key={i} className={p.cls} aria-hidden>
+          {p.t.split(/(\s+)/).map((w, j) =>
+            /^\s+$/.test(w) ? (
+              w
+            ) : (
+              <motion.span
+                key={j}
+                className="inline-block"
+                initial={{ opacity: 0, y: 10, filter: 'blur(4px)' }}
+                animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                transition={{ delay: 0.25 + n++ * 0.045, duration: 0.4, ease: [0.2, 0.8, 0.2, 1] }}
+              >
+                {w}
+              </motion.span>
+            ),
+          )}
+        </span>
+      ))}
+    </p>
+  );
+}
+
 /** Faixa de destaque com o resumo do momento (o "o que eu preciso saber hoje"). */
 function Destaque({ d, irLista }: { d: DashboardT; irLista: (p: Record<string, string>) => void }) {
   const k = d.kpis;
@@ -45,6 +73,9 @@ function Destaque({ d, irLista }: { d: DashboardT; irLista: (p: Record<string, s
       transition={{ duration: 0.6, ease: [0.2, 0.8, 0.2, 1], delay: 0.1 }}
       className="relative mb-6 overflow-hidden rounded-[20px] border border-line bg-card p-6 shadow-card sm:p-7"
     >
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] overflow-hidden" aria-hidden>
+        <span className="anim-varrer block h-full w-1/4 bg-gradient-to-r from-transparent via-brand to-transparent" />
+      </div>
       <div className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-brand/[0.09] blur-3xl anim-float-a" aria-hidden />
       <div className="pointer-events-none absolute -bottom-28 right-40 h-60 w-60 rounded-full bg-fg/[0.04] blur-3xl anim-float-b" aria-hidden />
       <div
@@ -57,16 +88,18 @@ function Destaque({ d, irLista }: { d: DashboardT; irLista: (p: Record<string, s
           <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold', ok ? 'bg-success/10 text-success' : 'bg-brand/[0.08] text-brand')}>
             <Sparkles className="h-3.5 w-3.5" /> Resumo de hoje
           </span>
-          <p className="mt-3 text-[20px] font-semibold leading-snug tracking-tight sm:text-[22px]">
-            {ok ? (
-              <>Nenhuma NC atrasada. Todas as {k.abertas} NCs abertas estão dentro do prazo. 🎉</>
-            ) : (
-              <>
-                Você tem <span className="text-danger">{k.atrasadas} NC{k.atrasadas > 1 ? 's' : ''} atrasada{k.atrasadas > 1 ? 's' : ''}</span>
-                {criticas > 0 && <>, {criticas} em nível crítico,</>} entre {k.abertas} abertas.
-              </>
-            )}
-          </p>
+          <Frase
+            className="mt-3 text-[20px] font-semibold leading-snug tracking-tight sm:text-[22px]"
+            partes={
+              ok
+                ? [{ t: `Nenhuma NC atrasada. Todas as ${k.abertas} NCs abertas estão dentro do prazo. 🎉` }]
+                : [
+                    { t: 'Você tem ' },
+                    { t: `${k.atrasadas} NC${k.atrasadas > 1 ? 's' : ''} atrasada${k.atrasadas > 1 ? 's' : ''}`, cls: 'text-danger' },
+                    { t: criticas > 0 ? `, ${criticas} em nível crítico, entre ${k.abertas} abertas.` : ` entre ${k.abertas} abertas.` },
+                  ]
+            }
+          />
           <p className="mt-2 text-[14px] text-muted">
             {pct === null ? (
               <>Nenhuma NC encerrada em {k.mesReferenciaRotulo}.</>
@@ -79,8 +112,8 @@ function Destaque({ d, irLista }: { d: DashboardT; irLista: (p: Record<string, s
         </div>
         <div className="flex flex-wrap gap-2">
           {!ok && (
-            <Button variant="brand" onClick={() => irLista({ aba: 'atrasadas' })}>
-              Ver atrasadas <ArrowRight className="h-4 w-4" />
+            <Button variant="brand" className="group" onClick={() => irLista({ aba: 'atrasadas' })}>
+              Ver atrasadas <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
             </Button>
           )}
           <Button variant="secondary" onClick={() => irLista({ aba: 'verificacao' })}>

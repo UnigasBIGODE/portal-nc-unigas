@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { CheckCircle2, FileSpreadsheet, MinusCircle, XCircle } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { NumeroAnimado } from '@/components/KpiCard';
 import { api, mensagemErro } from '@/lib/api';
 import type { Relatorio } from '@/lib/types';
 import { cn, fmtPct } from '@/lib/utils';
@@ -16,14 +18,18 @@ function StatusMeta({ ok }: { ok: boolean | null }) {
         <MinusCircle className="h-3.5 w-3.5" /> Sem encerramentos
       </span>
     );
-  return ok ? (
-    <Badge tom="success">
-      <CheckCircle2 className="h-3.5 w-3.5" /> Meta atingida
-    </Badge>
-  ) : (
-    <Badge tom="danger">
-      <XCircle className="h-3.5 w-3.5" /> Abaixo da meta
-    </Badge>
+  return (
+    <motion.span className="inline-block" initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', stiffness: 500, damping: 18, delay: 0.3 }}>
+      {ok ? (
+        <Badge tom="success">
+          <CheckCircle2 className="h-3.5 w-3.5" /> Meta atingida
+        </Badge>
+      ) : (
+        <Badge tom="danger">
+          <XCircle className="h-3.5 w-3.5" /> Abaixo da meta
+        </Badge>
+      )}
+    </motion.span>
   );
 }
 
@@ -129,10 +135,10 @@ export default function RelatorioMensal() {
               <tfoot>
                 <tr className="bg-elevated/60 font-semibold">
                   <td className="px-5 py-3">Total {ano}</td>
-                  <td className="tabular px-3 py-3 text-right">{r.total.total}</td>
-                  <td className="tabular px-3 py-3 text-right text-success">{r.total.noPrazo}</td>
-                  <td className="tabular px-3 py-3 text-right text-danger">{r.total.foraPrazo}</td>
-                  <td className="tabular px-3 py-3">{fmtPct(r.total.pct)}</td>
+                  <td className="tabular px-3 py-3 text-right"><NumeroAnimado valor={r.total.total} /></td>
+                  <td className="tabular px-3 py-3 text-right text-success"><NumeroAnimado valor={r.total.noPrazo} /></td>
+                  <td className="tabular px-3 py-3 text-right text-danger"><NumeroAnimado valor={r.total.foraPrazo} /></td>
+                  <td className="tabular px-3 py-3"><NumeroAnimado valor={r.total.pct} casas={1} sufixo="%" /></td>
                   <td className="px-5 py-3">
                     <StatusMeta ok={r.total.atingiuMeta} />
                   </td>

@@ -49,7 +49,11 @@ export function EtapaBadge({ etapa, curto }: { etapa: Etapa; curto?: boolean }) 
 export function AlertaBadge({ nivel }: { nivel: NivelAlerta | 'critico' | 'atencao' | 'info' }) {
   if (nivel === 'CRITICO' || nivel === 'critico')
     return (
-      <Badge tom="danger">
+      <Badge tom="danger" className="relative">
+        <span className="absolute -right-0.5 -top-0.5 flex h-2 w-2" aria-hidden>
+          <span className="anim-ping absolute inset-0 rounded-full bg-danger" />
+          <span className="relative h-2 w-2 rounded-full bg-danger" />
+        </span>
         <AlertOctagon className="h-3.5 w-3.5" aria-hidden /> Crítico
       </Badge>
     );

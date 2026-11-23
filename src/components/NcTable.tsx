@@ -2,6 +2,7 @@ import { useMemo, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createColumnHelper, flexRender, getCoreRowModel, useReactTable, type ColumnDef, type SortingState } from '@tanstack/react-table';
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, Inbox } from 'lucide-react';
+import { motion } from 'framer-motion';
 import type { NC } from '@/lib/types';
 import { cn, fmtData } from '@/lib/utils';
 import { AlertaBadge, CriticidadeBadge, EtapaBadge, StatusPrazoBadge } from './StatusBadges';
@@ -130,16 +131,19 @@ export function NcTable({
           </thead>
           <tbody>
             {table.getRowModel().rows.map((r, i) => (
-              <tr
-                key={r.id}
+              <motion.tr
+                key={r.original.nc_id}
+                layout="position"
+                initial={{ opacity: 0, x: -12 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: Math.min(i, 14) * 0.03, duration: 0.35, ease: [0.2, 0.8, 0.2, 1], layout: { type: 'spring', stiffness: 380, damping: 34 } }}
                 tabIndex={0}
-                style={{ ['--d' as string]: `${Math.min(i, 14) * 35}ms` }}
                 onClick={(e) => {
                   if ((e.target as HTMLElement).closest('input,button,a,label')) return;
                   navigate(`/ncs/${r.original.nc_id}`);
                 }}
                 onKeyDown={(e) => e.key === 'Enter' && navigate(`/ncs/${r.original.nc_id}`)}
-                className="anim-fade-in group/row cursor-pointer border-b border-line/60 transition-colors duration-200 last:border-0 hover:bg-brand/[0.03] focus:bg-elevated"
+                className="group/row cursor-pointer border-b border-line/60 transition-colors duration-200 last:border-0 hover:bg-brand/[0.03] focus:bg-elevated"
               >
                 {r.getVisibleCells().map((c) => (
                   <td key={c.id} className={cn(RESPONSIVO[c.column.id], 'px-3 py-3.5 align-middle first:pl-5 last:pr-5')}>
@@ -149,7 +153,7 @@ export function NcTable({
                 <td className="w-8 pr-4">
                   <ChevronRight className="h-4 w-4 -translate-x-2 text-muted opacity-0 transition-all duration-200 group-hover/row:translate-x-0 group-hover/row:opacity-100" />
                 </td>
-              </tr>
+              </motion.tr>
             ))}
           </tbody>
         </table>

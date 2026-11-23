@@ -1,8 +1,8 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
-import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate, useOutlet } from 'react-router-dom';
 import { useIsFetching } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Bell, ChevronRight, ChevronsLeft, LifeBuoy, LogOut, Menu, Moon, Search, ShieldCheck, Sun, X } from 'lucide-react';
+import { ArrowUp, Bell, ChevronRight, ChevronsLeft, LifeBuoy, LogOut, Menu, Moon, Search, ShieldCheck, Sun, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useAlertas } from '@/hooks/queries';
@@ -346,7 +346,7 @@ function Topbar({ abrirMenu, abrirBusca }: { abrirMenu: () => void; abrirBusca: 
             <span className="hidden flex-1 text-left sm:block">Buscar NC, página…</span>
             <kbd className="hidden rounded-md border border-line bg-elevated px-1.5 py-0.5 font-sans text-[11px] sm:block">{mac ? '⌘' : 'Ctrl'} K</kbd>
           </button>
-          <Button variant="secondary" size="icon" onClick={alternar} aria-label={tema === 'dark' ? 'Usar tema claro' : 'Usar tema escuro'}>
+          <Button variant="secondary" size="icon" onClick={(e) => alternar({ x: e.clientX, y: e.clientY })} aria-label={tema === 'dark' ? 'Usar tema claro' : 'Usar tema escuro'}>
             <AnimatePresence mode="wait" initial={false}>
               <motion.span key={tema} initial={{ rotate: -90, opacity: 0, scale: 0.6 }} animate={{ rotate: 0, opacity: 1, scale: 1 }} exit={{ rotate: 90, opacity: 0, scale: 0.6 }} transition={{ duration: 0.25 }}>
                 {tema === 'dark' ? <Sun className="h-[18px] w-[18px]" /> : <Moon className="h-[18px] w-[18px]" />}
@@ -364,6 +364,55 @@ function Topbar({ abrirMenu, abrirBusca }: { abrirMenu: () => void; abrirBusca: 
         </div>
       </div>
     </header>
+  );
+}
+
+// ---------------------------------------------------------------- transições de página
+
+/** Página que sai desliza e desfoca; a nova entra subindo. */
+function SaidaEntrada({ chave }: { chave: string }) {
+  const outlet = useOutlet();
+  return (
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.div
+        key={chave}
+        initial={{ opacity: 0, y: 18, filter: 'blur(6px)' }}
+        animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+        exit={{ opacity: 0, y: -10, filter: 'blur(6px)', transition: { duration: 0.16, ease: 'easeIn' } }}
+        transition={{ duration: 0.45, ease: [0.2, 0.8, 0.2, 1] }}
+      >
+        {outlet}
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
+/** Botão flutuante de voltar ao topo, aparece depois de rolar a página. */
+function VoltarAoTopo() {
+  const [ver, setVer] = useState(false);
+  useEffect(() => {
+    const f = () => setVer(window.scrollY > 700);
+    window.addEventListener('scroll', f, { passive: true });
+    return () => window.removeEventListener('scroll', f);
+  }, []);
+  return (
+    <AnimatePresence>
+      {ver && (
+        <motion.button
+          initial={{ opacity: 0, y: 20, scale: 0.6 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 20, scale: 0.6 }}
+          whileHover={{ y: -3 }}
+          whileTap={{ scale: 0.9 }}
+          transition={{ type: 'spring', stiffness: 420, damping: 26 }}
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          className="fixed bottom-24 right-5 z-40 grid h-11 w-11 place-items-center rounded-full border border-line bg-card text-fg shadow-pop"
+          aria-label="Voltar ao topo"
+        >
+          <ArrowUp className="h-4 w-4" />
+        </motion.button>
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -420,13 +469,12 @@ export function AppLayout() {
               </div>
             }
           >
-            <motion.div key={loc.pathname} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: [0.2, 0.8, 0.2, 1] }}>
-              <Outlet />
-            </motion.div>
+            <SaidaEntrada chave={loc.pathname} />
           </Suspense>
         </main>
       </div>
       <CommandPalette aberto={busca} fechar={() => setBusca(false)} />
+      <VoltarAoTopo />
     </div>
   );
 }

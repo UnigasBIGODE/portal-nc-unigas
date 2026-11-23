@@ -21,7 +21,7 @@ function Mini({ rotulo, valor, tom }: { rotulo: string; valor: number | string; 
 export function CardArea({ a, meta, onClick, indice = 0 }: { a: ResumoArea; meta: number; onClick: () => void; indice?: number }) {
   const atingiu = a.pctNoPrazo !== null && a.pctNoPrazo >= meta;
   return (
-    <Card lift className="anim-fade-up group flex flex-col" style={{ ['--d' as string]: `${indice * 70}ms` }}>
+    <Card tilt className="anim-fade-up group flex flex-col" style={{ ['--d' as string]: `${indice * 70}ms` }}>
       <button onClick={onClick} className="flex h-full flex-col p-5 text-left" aria-label={`Abrir NCs da área ${a.area}`}>
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">

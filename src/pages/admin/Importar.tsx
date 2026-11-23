@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, CheckCircle2, FileSpreadsheet, History, RefreshCw, UploadCloud } from 'lucide-react';
+import { AlertTriangle, FileSpreadsheet, History, RefreshCw, UploadCloud } from 'lucide-react';
 import { api, mensagemErro } from '@/lib/api';
 import type { ResultadoImportacao } from '@/lib/types';
 import { cn, fmtDataHora } from '@/lib/utils';
@@ -8,6 +8,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/components/Toast';
 import { useTitulo } from '@/hooks/queries';
 import { NumeroAnimado } from '@/components/KpiCard';
+import { SucessoAnimado } from '@/components/Celebracao';
 import { Aviso, Badge, Button, Card, CardHeader, Dialog, EmptyState, PageHeader, Skeleton } from '@/components/ui';
 
 const LOTE = 300;
@@ -271,12 +272,10 @@ export default function Importar() {
 
         {fase === 'fim' && resultado && (
           <div>
-            <div className="mb-5 flex items-center gap-3">
-              {resultado.totalErros ? <AlertTriangle className="h-6 w-6 text-warning" /> : <CheckCircle2 className="h-6 w-6 text-success" />}
-              <div>
-                <p className="font-semibold">Importação concluída</p>
-                <p className="text-[13px] text-muted">Os indicadores já foram recalculados.</p>
-              </div>
+            <div className="mb-6 flex flex-col items-center text-center">
+              {resultado.totalErros ? <AlertTriangle className="h-12 w-12 text-warning" /> : <SucessoAnimado />}
+              <p className="mt-3 text-[20px] font-bold tracking-tight">Importação concluída</p>
+              <p className="text-[13px] text-muted">Os indicadores já foram recalculados.</p>
             </div>
             <Contagens r={resultado} />
             <Problemas r={resultado} />

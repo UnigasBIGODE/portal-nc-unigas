@@ -1,6 +1,7 @@
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { AnimatePresence, motion, useAnimationControls } from 'framer-motion';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
+import { Check, Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { Logo } from '@/components/Logo';
 import { Aviso, Button, Field, Input } from '@/components/ui';
@@ -94,34 +95,50 @@ export default function Login() {
   const [ver, setVer] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
+  const [sucesso, setSucesso] = useState(false);
+  const tremor = useAnimationControls();
+  const entrando = useRef(false);
 
-  if (usuario) return <Navigate to={loc.state?.de ?? '/'} replace />;
+  if (usuario && !entrando.current) return <Navigate to={loc.state?.de ?? '/'} replace />;
 
   async function entrar(e: FormEvent) {
     e.preventDefault();
     setErro(null);
     setEnviando(true);
+    entrando.current = true;
     try {
       await login(email, senha);
+      setEnviando(false);
+      setSucesso(true);
+      await new Promise((r) => setTimeout(r, 750));
       navigate(loc.state?.de ?? '/', { replace: true });
     } catch (err) {
+      entrando.current = false;
       setErro(mensagemErro(err));
-    } finally {
+      void tremor.start({ x: [0, -10, 9, -6, 4, 0], transition: { duration: 0.45 } });
       setEnviando(false);
     }
   }
+  const atraso = (ms: number) => ({ ['--d' as string]: `${ms}ms` });
 
   return (
     <TelaPublica>
-      <h1 className="text-[26px] font-bold tracking-tight">Entrar</h1>
-      <p className="mt-1 text-sm text-muted">Bem-vindo(a) de volta. Use seu e-mail corporativo e senha.</p>
-      <form onSubmit={entrar} className="mt-6 space-y-4">
+      <h1 className="anim-fade-up text-[26px] font-bold tracking-tight" style={atraso(120)}>Entrar</h1>
+      <p className="anim-fade-up mt-1 text-sm text-muted" style={atraso(180)}>Bem-vindo(a) de volta. Use seu e-mail corporativo e senha.</p>
+      <motion.form
+        onSubmit={entrar}
+        className="mt-6 space-y-4"
+        animate={tremor}
+      >
+        <div className="anim-fade-up" style={atraso(240)}>
         <Field label="E-mail">
           <div className="relative">
             <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden />
             <Input type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} className="pl-10" placeholder="nome@empresa.com.br" autoFocus />
           </div>
         </Field>
+        </div>
+        <div className="anim-fade-up" style={atraso(300)}>
         <Field label="Senha">
           <div className="relative">
             <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden />
@@ -131,16 +148,41 @@ export default function Login() {
             </button>
           </div>
         </Field>
-        {erro && <Aviso>{erro}</Aviso>}
-        <Button type="submit" size="lg" className="w-full" loading={enviando}>
-          Entrar
-        </Button>
-        <div className="text-center">
+        </div>
+        <AnimatePresence>
+          {erro && (
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>
+              <Aviso>{erro}</Aviso>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        <div className="anim-fade-up" style={atraso(360)}>
+          <Button
+            type="submit"
+            size="lg"
+            className={`w-full transition-colors duration-300 ${sucesso ? '!bg-[#16A34A] hover:!bg-[#16A34A]' : ''}`}
+            loading={enviando}
+            disabled={sucesso}
+          >
+            <AnimatePresence mode="wait" initial={false}>
+              {sucesso ? (
+                <motion.span key="ok" className="flex items-center gap-2" initial={{ scale: 0.4, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', stiffness: 500, damping: 20 }}>
+                  <Check className="h-5 w-5" strokeWidth={3} /> Bem-vindo(a)!
+                </motion.span>
+              ) : (
+                <motion.span key="txt" exit={{ y: -10, opacity: 0 }}>
+                  Entrar
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </Button>
+        </div>
+        <div className="anim-fade-in text-center" style={atraso(420)}>
           <Link to="/esqueci-senha" className="text-[13px] text-muted underline-offset-4 hover:text-fg hover:underline">
             Esqueci minha senha
           </Link>
         </div>
-      </form>
+      </motion.form>
       <PainelLoginDemo
         preencher={(e, s) => {
           setEmail(e);

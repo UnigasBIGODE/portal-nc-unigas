@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BellOff, ChevronRight } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { mensagemErro } from '@/lib/api';
 import { fmtData } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
@@ -46,7 +47,7 @@ export default function Alertas() {
         ) : (
           <ul className="divide-y divide-line/60">
             {itens.map((a, i) => (
-              <li key={`${a.tipo}-${a.nc_id}-${i}`} className="anim-fade-in" style={{ ['--d' as string]: `${Math.min(i, 15) * 35}ms` }}>
+              <motion.li key={`${a.tipo}-${a.nc_id}-${i}`} layout initial={{ opacity: 0, x: -24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 24 }} transition={{ type: 'spring', stiffness: 380, damping: 30, delay: Math.min(i, 15) * 0.035 }}>
                 <Link to={`/ncs/${a.nc_id}`} className="group flex items-center gap-4 px-5 py-4 transition-colors hover:bg-brand/[0.03]">
                   <div className="w-20 shrink-0">
                     <AlertaBadge nivel={a.nivel} />
@@ -64,7 +65,7 @@ export default function Alertas() {
                   </div>
                   <ChevronRight className="h-4 w-4 shrink-0 text-muted transition-transform group-hover:translate-x-1" />
                 </Link>
-              </li>
+              </motion.li>
             ))}
           </ul>
         )}

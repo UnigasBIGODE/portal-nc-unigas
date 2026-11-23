@@ -191,7 +191,7 @@ export const globais = {
     getFileById: (id) => {
       const a = estado.arquivos[id];
       if (!a) throw new Error('Arquivo não encontrado');
-      return { getBlob: () => blob(assinado(Array.from(atob(a.b64), (c) => c.charCodeAt(0))), a.mime, a.nome) };
+      return { getBlob: () => blob(assinado(Array.from(atob(a.b64), (c) => c.charCodeAt(0))), a.mime, a.nome), setTrashed: () => { delete estado.arquivos[id]; } };
     },
   },
   ContentService: { MimeType: { JSON: 'json' }, createTextOutput: (s) => ({ setMimeType() { return this; }, getContent: () => s }) },

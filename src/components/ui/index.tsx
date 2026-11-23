@@ -44,22 +44,43 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   loading?: boolean;
 }
 
+/** Onda (ripple) a partir do ponto clicado. */
+function ondular(e: React.PointerEvent<HTMLElement>) {
+  const alvo = e.currentTarget;
+  const host = alvo.querySelector(':scope > .ripple-host');
+  if (!host || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  const r = alvo.getBoundingClientRect();
+  const d = Math.max(r.width, r.height) * 2.2;
+  const s = document.createElement('span');
+  s.className = 'ripple';
+  s.style.width = s.style.height = `${d}px`;
+  s.style.left = `${e.clientX - r.left - d / 2}px`;
+  s.style.top = `${e.clientY - r.top - d / 2}px`;
+  host.appendChild(s);
+  s.addEventListener('animationend', () => s.remove());
+}
+
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = 'primary', size = 'md', loading, className, children, disabled, ...props },
+  { variant = 'primary', size = 'md', loading, className, children, disabled, onPointerDown, ...props },
   ref,
 ) {
   return (
     <button
       ref={ref}
       disabled={disabled || loading}
+      onPointerDown={(e) => {
+        ondular(e);
+        onPointerDown?.(e);
+      }}
       className={cn(
-        'inline-flex shrink-0 items-center justify-center rounded-full font-medium transition-all duration-200 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50',
+        'relative inline-flex shrink-0 items-center justify-center rounded-full font-medium transition-all duration-200 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50',
         variantes[variant],
         tamanhos[size],
         className,
       )}
       {...props}
     >
+      <span className="ripple-host" aria-hidden />
       {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
       {children}
     </button>
@@ -68,8 +89,35 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
 
 // ---------------------------------------------------------------- Card
 
-export function Card({ className, lift, ...p }: HTMLAttributes<HTMLDivElement> & { lift?: boolean }) {
-  return <div className={cn('rounded-card border border-line bg-card shadow-card', lift && 'card-lift', className)} {...p} />;
+/** Cartão. `lift`: sobe no hover com brilho seguindo o mouse. `tilt`: inclinação 3D suave. */
+export function Card({ className, lift, tilt, onMouseMove, onMouseLeave, ...p }: HTMLAttributes<HTMLDivElement> & { lift?: boolean; tilt?: boolean }) {
+  const mover = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (lift || tilt) {
+      const el = e.currentTarget;
+      const r = el.getBoundingClientRect();
+      const x = e.clientX - r.left, y = e.clientY - r.top;
+      el.style.setProperty('--mx', `${x}px`);
+      el.style.setProperty('--my', `${y}px`);
+      if (tilt) {
+        el.style.setProperty('--ry', `${((x / r.width) - 0.5) * 6}deg`);
+        el.style.setProperty('--rx', `${(0.5 - y / r.height) * 6}deg`);
+      }
+    }
+    onMouseMove?.(e);
+  };
+  const sair = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.currentTarget.style.setProperty('--rx', '0deg');
+    e.currentTarget.style.setProperty('--ry', '0deg');
+    onMouseLeave?.(e);
+  };
+  return (
+    <div
+      className={cn('rounded-card border border-line bg-card shadow-card', (lift || tilt) && 'card-lift card-spot', tilt && 'card-tilt', className)}
+      onMouseMove={mover}
+      onMouseLeave={sair}
+      {...p}
+    />
+  );
 }
 
 export function CardHeader({ title, description, action, className }: { title: ReactNode; description?: ReactNode; action?: ReactNode; className?: string }) {

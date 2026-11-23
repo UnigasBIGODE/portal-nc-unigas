@@ -3,7 +3,8 @@ import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion, useMotionValueEvent, useScroll } from 'framer-motion';
 import { useToast } from '@/components/Toast';
-import { ArrowLeft, ArrowRight, Check, CheckCircle2, Download, FileText, MessageSquare, Paperclip, Pencil, RotateCcw, Send, SendHorizontal, Undo2, Upload } from 'lucide-react';
+import { SucessoAnimado } from '@/components/Celebracao';
+import { ArrowLeft, ArrowRight, Check, CheckCircle2, Download, Eye, FileText, ImagePlus, Loader2, MessageSquare, Paperclip, Pencil, RotateCcw, Send, SendHorizontal, Trash2, Undo2, Upload, X } from 'lucide-react';
 import { api, arquivoParaBase64, baixarBase64, mensagemErro } from '@/lib/api';
 import type { DetalheNC as DetalheT, Etapa, NC } from '@/lib/types';
 import { cn, fmtData, fmtDataHora, hojeISO, iniciais } from '@/lib/utils';
@@ -145,12 +146,251 @@ function EditarNC({ nc, aberto, fechar, salvar, salvando, erro }: { nc: NC; aber
 }
 
 
+// ---------------------------------------------------------------- envio para verificação (com evidências)
+
+type DetalheCompleto = DetalheT & { podeEnviarVerificacao?: boolean; podeExcluirAnexo?: boolean };
+type Fase = 'form' | 'enviando' | 'sucesso';
+const MAX_ARQUIVO = 10 * 1024 * 1024;
+const MAX_TOTAL = 25 * 1024 * 1024;
+
+function tamanho(b: number) {
+  return b > 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(1).replace('.', ',')} MB` : `${Math.max(1, Math.round(b / 1024))} KB`;
+}
+
+const PASSOS_ENVIO = ['Preparando as evidências', 'Enviando para o servidor', 'Atualizando a etapa'];
+
+function EnviarVerificacao({ nc, exigeEvidencia, onConcluido }: { nc: NC; exigeEvidencia: boolean; onConcluido: (d: DetalheCompleto) => void }) {
+  const toast = useToast();
+  const [aberto, setAberto] = useState(false);
+  const [fase, setFase] = useState<Fase>('form');
+  const [arquivos, setArquivos] = useState<{ file: File; url?: string }[]>([]);
+  const [data, setData] = useState(hojeISO());
+  const [obs, setObs] = useState('');
+  const [passo, setPasso] = useState(0);
+  const [arrastando, setArrastando] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+  const resultado = useRef<DetalheCompleto | null>(null);
+  const total = arquivos.reduce((t, a) => t + a.file.size, 0);
+
+  function adicionar(lista: FileList | null) {
+    if (!lista) return;
+    const novos: { file: File; url?: string }[] = [];
+    Array.from(lista).forEach((f) => {
+      if (f.size > MAX_ARQUIVO) return toast({ tipo: 'erro', titulo: 'Arquivo muito grande', descricao: `${f.name} passa de 10 MB.` });
+      novos.push({ file: f, url: f.type.startsWith('image/') ? URL.createObjectURL(f) : undefined });
+    });
+    setArquivos((a) => [...a, ...novos].slice(0, 10));
+  }
+
+  function abrir() {
+    setFase('form');
+    setArquivos([]);
+    setData(hojeISO());
+    setObs('');
+    setPasso(0);
+    setAberto(true);
+  }
+
+  function fechar() {
+    if (fase === 'enviando') return;
+    setAberto(false);
+    arquivos.forEach((a) => a.url && URL.revokeObjectURL(a.url));
+    if (fase === 'sucesso' && resultado.current) onConcluido(resultado.current);
+  }
+
+  async function enviar() {
+    setFase('enviando');
+    setPasso(0);
+    try {
+      const lista = [];
+      for (const a of arquivos) lista.push({ nome: a.file.name, mimeType: a.file.type || 'application/octet-stream', base64: await arquivoParaBase64(a.file) });
+      setPasso(1);
+      const t = setTimeout(() => setPasso(2), 1400);
+      const d = await api<DetalheCompleto>('enviarParaVerificacao', { nc_id: nc.nc_id, data_execucao: data, observacao: obs.trim() || undefined, arquivos: lista });
+      clearTimeout(t);
+      setPasso(3);
+      resultado.current = d;
+      await new Promise((r) => setTimeout(r, 350));
+      setFase('sucesso');
+      setTimeout(() => {
+        setAberto(false);
+        onConcluido(d);
+      }, 2600);
+    } catch (e) {
+      setFase('form');
+      toast({ tipo: 'erro', titulo: 'Não foi possível enviar', descricao: mensagemErro(e) });
+    }
+  }
+
+  const podeEnviar = (!exigeEvidencia || arquivos.length > 0) && total <= MAX_TOTAL && !!data;
+
+  return (
+    <>
+      <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+        <Button size="sm" variant="brand" onClick={abrir} className="relative overflow-hidden">
+          <motion.span className="absolute inset-0 bg-white/25" initial={{ x: '-120%' }} animate={{ x: '120%' }} transition={{ duration: 1.6, repeat: Infinity, repeatDelay: 2.5, ease: 'easeInOut' }} style={{ skewX: -20 }} />
+          <SendHorizontal className="relative h-4 w-4" /> <span className="relative">Enviar para verificação</span>
+        </Button>
+      </motion.div>
+
+      <Dialog
+        open={aberto}
+        onClose={fechar}
+        size="md"
+        title={fase === 'sucesso' ? 'Tudo certo!' : `Enviar para verificação · NC ${nc.nc_id}`}
+        description={fase === 'form' ? 'Anexe as evidências do serviço executado. Ao concluir, a NC passa automaticamente para “Em verificação c/ Comgás”.' : undefined}
+        footer={
+          fase === 'form' ? (
+            <>
+              <Button variant="secondary" onClick={fechar}>
+                Cancelar
+              </Button>
+              <Button variant="brand" disabled={!podeEnviar} onClick={enviar}>
+                <SendHorizontal className="h-4 w-4" /> Enviar {arquivos.length > 0 && `com ${arquivos.length} evidência${arquivos.length > 1 ? 's' : ''}`}
+              </Button>
+            </>
+          ) : fase === 'sucesso' ? (
+            <Button onClick={fechar}>Fechar</Button>
+          ) : undefined
+        }
+      >
+        <AnimatePresence mode="wait" initial={false}>
+          {fase === 'form' && (
+            <motion.div key="form" initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }} className="space-y-4">
+              <input ref={input} type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" className="hidden" onChange={(e) => { adicionar(e.target.files); e.target.value = ''; }} />
+              <motion.button
+                type="button"
+                onClick={() => input.current?.click()}
+                onDragOver={(e) => { e.preventDefault(); setArrastando(true); }}
+                onDragLeave={() => setArrastando(false)}
+                onDrop={(e) => { e.preventDefault(); setArrastando(false); adicionar(e.dataTransfer.files); }}
+                animate={{ scale: arrastando ? 1.02 : 1 }}
+                className={cn(
+                  'group flex w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-8 text-center transition-colors',
+                  arrastando ? 'border-brand bg-brand/[0.06]' : 'border-line hover:border-brand/50 hover:bg-brand/[0.03]',
+                  exigeEvidencia && arquivos.length === 0 && 'border-brand/40',
+                )}
+              >
+                <motion.span className="grid h-12 w-12 place-items-center rounded-full bg-brand/[0.08] text-brand" animate={{ y: [0, -4, 0] }} transition={{ duration: 2.4, repeat: Infinity }}>
+                  <ImagePlus className="h-5 w-5" />
+                </motion.span>
+                <p className="mt-3 text-[14px] font-semibold">Clique ou arraste as fotos e documentos</p>
+                <p className="mt-1 text-[12px] text-muted">
+                  {exigeEvidencia ? 'Obrigatório: ao menos 1 evidência · ' : ''}até 10 arquivos, 10 MB cada, 25 MB no total
+                </p>
+              </motion.button>
+
+              {arquivos.length > 0 && (
+                <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  <AnimatePresence initial={false}>
+                    {arquivos.map((a, i) => (
+                      <motion.li
+                        key={a.file.name + a.file.size + i}
+                        layout
+                        initial={{ opacity: 0, scale: 0.85, y: 8 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.85 }}
+                        transition={{ type: 'spring', stiffness: 420, damping: 28 }}
+                        className="group relative overflow-hidden rounded-xl border border-line bg-elevated"
+                      >
+                        {a.url ? (
+                          <img src={a.url} alt={a.file.name} className="h-24 w-full object-cover" />
+                        ) : (
+                          <div className="grid h-24 place-items-center text-muted">
+                            <FileText className="h-7 w-7" />
+                          </div>
+                        )}
+                        <div className="px-2 py-1.5">
+                          <p className="truncate text-[12px] font-medium">{a.file.name}</p>
+                          <p className="text-[11px] text-muted">{tamanho(a.file.size)}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setArquivos((l) => l.filter((_, j) => j !== i))}
+                          className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full bg-black/55 text-white opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
+                          aria-label={`Remover ${a.file.name}`}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </motion.li>
+                    ))}
+                  </AnimatePresence>
+                </ul>
+              )}
+              {total > MAX_TOTAL && <Aviso>O total passa de 25 MB. Remova algum arquivo ou envie parte pelo botão Anexar.</Aviso>}
+
+              <div className="grid gap-4 sm:grid-cols-[180px_1fr]">
+                <Field label="Data da execução">
+                  <Input type="date" value={data} max={hojeISO()} onChange={(e) => setData(e.target.value)} />
+                </Field>
+                <Field label="Observação (opcional)">
+                  <Input value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Ex.: serviço refeito conforme o plano de ação" />
+                </Field>
+              </div>
+            </motion.div>
+          )}
+
+          {fase === 'enviando' && (
+            <motion.div key="enviando" initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, scale: 0.96 }} className="py-4">
+              <div className="relative mx-auto h-24 w-full max-w-sm overflow-hidden">
+                <div className="absolute inset-x-6 top-1/2 h-px -translate-y-1/2 border-t-2 border-dashed border-line" />
+                <motion.div className="absolute top-1/2 -translate-y-1/2 text-brand" initial={{ left: '0%' }} animate={{ left: ['0%', '86%'], y: [0, -10, 4, -6, 0] }} transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}>
+                  <SendHorizontal className="h-8 w-8 -rotate-12" />
+                </motion.div>
+                <div className="absolute right-0 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-info/10 text-info">
+                  <Eye className="h-5 w-5" />
+                </div>
+              </div>
+              <ol className="mx-auto mt-2 max-w-sm space-y-3">
+                {PASSOS_ENVIO.map((t, i) => {
+                  const feito = passo > i, atual = passo === i;
+                  return (
+                    <motion.li key={t} className="flex items-center gap-3 text-[14px]" initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.12 }}>
+                      <span className={cn('grid h-6 w-6 place-items-center rounded-full border-2 transition-colors', feito ? 'border-success bg-success text-white' : atual ? 'border-brand' : 'border-line')}>
+                        {feito ? <Check className="h-3.5 w-3.5" /> : atual ? <Loader2 className="h-3.5 w-3.5 animate-spin text-brand" /> : null}
+                      </span>
+                      <span className={cn(feito ? 'text-muted line-through decoration-success/40' : atual ? 'font-semibold' : 'text-muted')}>
+                        {t}
+                        {i === 0 && arquivos.length > 0 && ` (${arquivos.length} arquivo${arquivos.length > 1 ? 's' : ''}, ${tamanho(total)})`}
+                      </span>
+                    </motion.li>
+                  );
+                })}
+              </ol>
+              <div className="mx-auto mt-6 h-1.5 max-w-sm overflow-hidden rounded-full bg-elevated">
+                <motion.div className="h-full rounded-full bg-gradient-to-r from-brand to-[#ff5a63]" animate={{ width: `${Math.min(100, 12 + passo * 30)}%` }} transition={{ duration: 0.6 }} />
+              </div>
+            </motion.div>
+          )}
+
+          {fase === 'sucesso' && (
+            <motion.div key="sucesso" initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: 'spring', stiffness: 300, damping: 24 }} className="py-4 text-center">
+              <SucessoAnimado />
+              <motion.p className="mt-4 text-[20px] font-bold tracking-tight" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }}>
+                Enviada para verificação!
+              </motion.p>
+              <motion.p className="mx-auto mt-1 max-w-sm text-[14px] text-muted" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.85 }}>
+                {arquivos.length > 0 ? `${arquivos.length} evidência${arquivos.length > 1 ? 's anexadas' : ' anexada'}. ` : ''}A NC {nc.nc_id} agora aguarda a verificação da Comgás.
+              </motion.p>
+              <motion.div className="mt-4 inline-flex items-center gap-2" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1 }}>
+                <EtapaBadge etapa="EXECUÇÃO" curto />
+                <ArrowRight className="h-4 w-4 text-muted" />
+                <motion.span initial={{ scale: 0.6 }} animate={{ scale: [0.6, 1.15, 1] }} transition={{ delay: 1.1, duration: 0.5 }}>
+                  <EtapaBadge etapa="VERIFICAÇÃO" curto />
+                </motion.span>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </Dialog>
+    </>
+  );
+}
+
 type AcaoEtapa = { destino: Etapa; titulo: string; descricao: string; botao: string; motivo: boolean; data: boolean; variante: 'brand' | 'primary' | 'danger' | 'secondary' };
 
 const ACOES_ETAPA: Record<Etapa, AcaoEtapa[]> = {
-  'EXECUÇÃO': [
-    { destino: 'VERIFICAÇÃO', titulo: 'Enviar para verificação', descricao: 'A Unigás concluiu a execução. A NC passa a aguardar a verificação da Comgás.', botao: 'Enviar para verificação', motivo: false, data: true, variante: 'brand' },
-  ],
+  'EXECUÇÃO': [],
   'VERIFICAÇÃO': [
     { destino: 'FINALIZADO', titulo: 'Aprovar e finalizar', descricao: 'A Comgás aprovou a execução. A NC será encerrada e contará no Relatório Mensal.', botao: 'Aprovar e finalizar', motivo: false, data: false, variante: 'primary' },
     { destino: 'EXECUÇÃO', titulo: 'Reprovar e voltar para execução', descricao: 'A Comgás reprovou a execução. A NC volta para a Unigás e a data da execução é apagada.', botao: 'Reprovar', motivo: true, data: false, variante: 'danger' },
@@ -230,7 +470,7 @@ export default function DetalheNC() {
   useTitulo(`NC ${id}`);
   const qc = useQueryClient();
   const chave = ['nc', id];
-  const q = useQuery({ queryKey: chave, queryFn: () => api<DetalheT>('detalheNC', { nc_id: Number(id) }) });
+  const q = useQuery({ queryKey: chave, queryFn: () => api<DetalheCompleto>('detalheNC', { nc_id: Number(id) }) });
   const [editandoPlano, setEditandoPlano] = useState(false);
   const [plano, setPlano] = useState('');
   const [comentario, setComentario] = useState('');
@@ -239,6 +479,17 @@ export default function DetalheNC() {
   const [baixando, setBaixando] = useState<string | null>(null);
   const inputArq = useRef<HTMLInputElement>(null);
   const [aba, setAba] = useState<'comentarios' | 'historico'>('comentarios');
+  const [excluir, setExcluir] = useState<{ id: string; nome_arquivo: string } | null>(null);
+  const [motivoExclusao, setMotivoExclusao] = useState('');
+  const excluirAnexo = useMutation({
+    mutationFn: (anexoId: string) => api<DetalheCompleto>('excluirAnexo', { id: anexoId, motivo: motivoExclusao.trim() || undefined }),
+    onSuccess: (d) => {
+      qc.setQueryData(chave, d);
+      toast({ tipo: 'sucesso', titulo: 'Anexo excluído', descricao: 'O arquivo foi removido da NC e do Drive.' });
+      setExcluir(null);
+    },
+    onError: (e) => toast({ tipo: 'erro', titulo: 'Não foi possível excluir', descricao: mensagemErro(e) }),
+  });
   const toast = useToast();
   const { scrollY } = useScroll();
   const [compacto, setCompacto] = useState(false);
@@ -315,7 +566,7 @@ export default function DetalheNC() {
       </Card>
     );
 
-  const { nc, comentarios, anexos, historico, podeEditarTudo } = q.data;
+  const { nc, comentarios, anexos, historico, podeEditarTudo, podeEditarPlano, podeEnviarVerificacao, podeExcluirAnexo } = q.data;
 
   return (
     <div>
@@ -362,25 +613,39 @@ export default function DetalheNC() {
               <CriticidadeBadge valor={nc.criticidade} />
             </div>
           </div>
-          {podeEditarTudo && (
-            <div className="flex flex-wrap items-center gap-2">
-              <FluxoEtapa
+          <div className="flex flex-wrap items-center gap-2">
+            {podeEnviarVerificacao && (
+              <EnviarVerificacao
                 nc={nc}
-                onFeito={(d, a) => {
+                exigeEvidencia={!podeEditarTudo}
+                onConcluido={(d) => {
                   qc.setQueryData(chave, d);
                   invalidarListas();
                   setAba('comentarios');
-                  toast({ tipo: 'sucesso', titulo: a.titulo, descricao: `NC ${nc.nc_id} agora está em “${a.destino === 'EXECUÇÃO' ? 'Em execução c/ Unigás' : a.destino === 'VERIFICAÇÃO' ? 'Em verificação c/ Comgás' : 'Finalizado'}”.` });
+                  toast({ tipo: 'sucesso', titulo: 'Enviada para verificação', descricao: `NC ${nc.nc_id} agora está em “Em verificação c/ Comgás”.` });
                 }}
               />
-              <Button variant="secondary" size="sm" onClick={() => { setErro(null); setEditar(true); }}>
-                <Pencil className="h-3.5 w-3.5" /> Editar
-              </Button>
-            </div>
-          )}
+            )}
+            {podeEditarTudo && (
+              <>
+                <FluxoEtapa
+                  nc={nc}
+                  onFeito={(d, a) => {
+                    qc.setQueryData(chave, d);
+                    invalidarListas();
+                    setAba('comentarios');
+                    toast({ tipo: 'sucesso', titulo: a.titulo, descricao: `NC ${nc.nc_id} agora está em “${a.destino === 'EXECUÇÃO' ? 'Em execução c/ Unigás' : a.destino === 'VERIFICAÇÃO' ? 'Em verificação c/ Comgás' : 'Finalizado'}”.` });
+                  }}
+                />
+                <Button variant="secondary" size="sm" onClick={() => { setErro(null); setEditar(true); }}>
+                  <Pencil className="h-3.5 w-3.5" /> Editar
+                </Button>
+              </>
+            )}
+          </div>
         </div>
         <div className="mt-8">
-          <LinhaDoTempo nc={nc} />
+          <LinhaDoTempo key={nc.etapa + (nc.data_execucao ?? '')} nc={nc} />
         </div>
       </Card>
 
@@ -396,9 +661,9 @@ export default function DetalheNC() {
           <Card>
             <CardHeader
               title="Plano de ação"
-              description="Atualize o andamento das ações corretivas"
+              description={podeEditarPlano ? 'Atualize o andamento das ações corretivas' : 'Definido pela Unigás – SSM'}
               action={
-                !editandoPlano && (
+                podeEditarPlano && !editandoPlano && (
                   <Button variant="secondary" size="sm" onClick={() => { setPlano(nc.plano_acao ?? ''); setEditandoPlano(true); }}>
                     <Pencil className="h-3.5 w-3.5" /> Atualizar
                   </Button>
@@ -538,27 +803,70 @@ export default function DetalheNC() {
             />
             <ul className="space-y-1 p-3">
               {anexos.length === 0 && <li className="px-2 py-3 text-sm text-muted">Nenhum anexo.</li>}
-              {anexos.map((a) => (
-                <li key={a.id} className="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-elevated">
-                  <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-elevated text-muted">
-                    {/\.(png|jpe?g|gif|webp|heic)$/i.test(a.nome_arquivo) ? <Paperclip className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13px] font-medium">{a.nome_arquivo}</p>
-                    <p className="text-[12px] text-muted">
-                      {a.autor} · {fmtDataHora(a.criado_em)}
-                    </p>
-                  </div>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" loading={baixando === a.id} onClick={() => baixar(a.id)} aria-label={`Baixar ${a.nome_arquivo}`}>
-                    {baixando !== a.id && <Download className="h-4 w-4" />}
-                  </Button>
-                </li>
-              ))}
+              <AnimatePresence initial={false}>
+                {anexos.map((a) => (
+                  <motion.li
+                    key={a.id}
+                    layout
+                    initial={{ opacity: 0, y: 10, backgroundColor: 'rgb(var(--success) / 0.12)' }}
+                    animate={{ opacity: 1, y: 0, backgroundColor: 'rgb(var(--success) / 0)' }}
+                    exit={{ opacity: 0, x: 40, height: 0, transition: { duration: 0.25 } }}
+                    transition={{ duration: 0.45, backgroundColor: { duration: 2.2 } }}
+                    className="group flex items-center gap-3 rounded-xl px-2 py-2 hover:!bg-elevated"
+                  >
+                    <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-elevated text-muted">
+                      {/\.(png|jpe?g|gif|webp|heic)$/i.test(a.nome_arquivo) ? <Paperclip className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[13px] font-medium">{a.nome_arquivo}</p>
+                      <p className="text-[12px] text-muted">
+                        {a.autor} · {fmtDataHora(a.criado_em)}
+                      </p>
+                    </div>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" loading={baixando === a.id} onClick={() => baixar(a.id)} aria-label={`Baixar ${a.nome_arquivo}`}>
+                      {baixando !== a.id && <Download className="h-4 w-4" />}
+                    </Button>
+                    {podeExcluirAnexo && (
+                      <Button variant="ghost" size="icon" className="h-8 w-8 hover:!bg-danger/10 hover:!text-danger" onClick={() => { setMotivoExclusao(''); setExcluir(a); }} aria-label={`Excluir ${a.nome_arquivo}`}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </motion.li>
+                ))}
+              </AnimatePresence>
             </ul>
           </Card>
 
         </div>
       </div>
+
+      <Dialog
+        open={!!excluir}
+        onClose={() => setExcluir(null)}
+        size="sm"
+        title="Excluir anexo?"
+        description="O arquivo será removido desta NC e enviado para a lixeira do Google Drive. A exclusão fica no histórico."
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setExcluir(null)}>
+              Cancelar
+            </Button>
+            <Button variant="brand" loading={excluirAnexo.isPending} onClick={() => excluir && excluirAnexo.mutate(excluir.id)}>
+              <Trash2 className="h-4 w-4" /> Excluir
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 rounded-xl border border-line bg-elevated/60 p-3">
+            <FileText className="h-5 w-5 text-muted" />
+            <span className="truncate text-[14px] font-medium">{excluir?.nome_arquivo}</span>
+          </div>
+          <Field label="Motivo (opcional)" hint="Ex.: evidência recusada pela Comgás.">
+            <Input value={motivoExclusao} onChange={(e) => setMotivoExclusao(e.target.value)} />
+          </Field>
+        </div>
+      </Dialog>
 
       {podeEditarTudo && editar && (
         <EditarNC nc={nc} aberto={editar} fechar={() => setEditar(false)} salvando={atualizar.isPending} erro={erro} salvar={(c) => atualizar.mutate(c)} />

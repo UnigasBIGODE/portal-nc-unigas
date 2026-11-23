@@ -58,7 +58,7 @@ export function KpiCard({
 }) {
   const Comp = onClick ? 'button' : 'div';
   return (
-    <Card lift className="anim-fade-up group relative overflow-hidden" style={{ '--d': `${indice * 70}ms` } as CSSProperties}>
+    <Card tilt className="anim-fade-up group relative overflow-hidden" style={{ '--d': `${indice * 70}ms` } as CSSProperties}>
       <span
         className={cn('pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full opacity-0 blur-2xl transition-opacity duration-500 group-hover:opacity-100', tom === 'danger' || tom === 'brand' ? 'bg-brand/15' : 'bg-fg/5')}
         aria-hidden

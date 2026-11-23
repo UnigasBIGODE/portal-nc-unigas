@@ -173,14 +173,17 @@ export interface ResultadoImportacao {
   semAlteracao: number;
   totalErros: number;
   totalAvisos: number;
-  erros: { linha: number; nc_id: number | string; msg: string }[];
-  avisos: { linha: number; nc_id: number | string; msg: string }[];
+  erros: { linha: number; nc_id: number | string; msg: string; arquivo?: string }[];
+  avisos: { linha: number; nc_id: number | string; msg: string; arquivo?: string }[];
   retomadas?: RetomadaImport[];
   totalRetomadas?: number;
   prorrogacoes?: ProrrogacaoImport[];
   totalProrrogacoes?: number;
   novasIds?: number[];
+  ids?: number[];
   emails?: number;
+  finalizadas?: number;
+  finalizadasSemData?: number;
 }
 
 /** NC com pedido de prorrogação que o Obrasoft devolveu para execução (resposta do verificador). */

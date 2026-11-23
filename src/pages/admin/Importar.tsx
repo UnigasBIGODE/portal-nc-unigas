@@ -1,12 +1,12 @@
 import { useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, ArrowRight, CalendarClock, FileSpreadsheet, Mail, History, RefreshCw, Undo2, UploadCloud } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CalendarClock, CheckCheck, FileSpreadsheet, Mail, History, RefreshCw, Undo2, UploadCloud } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { EtapaBadge } from '@/components/StatusBadges';
 import { api, mensagemErro } from '@/lib/api';
 import type { Etapa, ProrrogacaoImport, ResultadoImportacao, RetomadaImport } from '@/lib/types';
-import { cn, fmtDataHora } from '@/lib/utils';
+import { cn, fmtData, fmtDataHora, hojeISO } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/components/Toast';
 import { useTitulo } from '@/hooks/queries';
@@ -41,6 +41,7 @@ function somar(a: ResultadoImportacao, b: ResultadoImportacao): ResultadoImporta
     prorrogacoes: [...(a.prorrogacoes ?? []), ...(b.prorrogacoes ?? [])],
     totalProrrogacoes: (a.totalProrrogacoes ?? 0) + (b.totalProrrogacoes ?? 0),
     novasIds: [...(a.novasIds ?? []), ...(b.novasIds ?? [])],
+    ids: [...(a.ids ?? []), ...(b.ids ?? [])],
   };
 }
 const VAZIO: ResultadoImportacao = { novas: 0, atualizadas: 0, semAlteracao: 0, totalErros: 0, totalAvisos: 0, erros: [], avisos: [], retomadas: [], totalRetomadas: 0, prorrogacoes: [], totalProrrogacoes: 0, novasIds: [] };
@@ -101,6 +102,107 @@ function AvisarPorEmail({ ativo, mudar, r }: { ativo: boolean; mudar: (v: boolea
         </span>
       </span>
     </label>
+  );
+}
+
+type Ausente = { nc_id: number; titulo: string; area: string; etapa: Etapa; prazo: string | null; data_execucao: string | null; status_prazo: string };
+type DecisaoAusente = { finalizar: boolean; data: string };
+
+/** Conferência de abertas: NCs abertas no portal que não vieram em nenhum arquivo (provavelmente finalizadas no Obrasoft). */
+function Ausentes({ lista, totalAbertas, decisoes, mudar, carregando }: {
+  lista: Ausente[]; totalAbertas: number; decisoes: Record<number, DecisaoAusente>; mudar: (id: number, d: Partial<DecisaoAusente>) => void; carregando: boolean;
+}) {
+  const [dataTodas, setDataTodas] = useState('');
+  const marcadas = lista.filter((n) => decisoes[n.nc_id]?.finalizar).length;
+  const semData = lista.filter((n) => decisoes[n.nc_id]?.finalizar && !decisoes[n.nc_id]?.data).length;
+  const suspeito = totalAbertas > 0 && lista.length / totalAbertas > 0.3;
+  if (carregando)
+    return (
+      <div className="mt-5 flex items-center gap-3 rounded-2xl border border-line p-4 text-[13px] text-muted">
+        <RefreshCw className="h-4 w-4 animate-spin" /> Conferindo as NCs abertas do portal…
+      </div>
+    );
+  if (!lista.length)
+    return (
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mt-5 flex items-center gap-3 rounded-2xl border border-success/30 bg-success/[0.06] p-4 text-[13px]">
+        <CheckCheck className="h-5 w-5 text-success" /> Todas as NCs abertas do portal estão nos arquivos. Nenhuma para finalizar.
+      </motion.div>
+    );
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.45, ease: [0.2, 0.8, 0.2, 1] }}
+      className="mt-5 overflow-hidden rounded-2xl border border-success/40 bg-success/[0.05]"
+    >
+      <div className="flex flex-wrap items-start gap-3 border-b border-success/25 p-4">
+        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-success/15 text-success">
+          <CheckCheck className="h-4 w-4" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold">{lista.length} NC(s) abertas no portal não vieram nos arquivos</p>
+          <p className="text-[13px] text-muted">
+            Provavelmente foram finalizadas no Obrasoft. As marcadas serão <b>finalizadas</b> com a data de execução informada (sem data, vão para Pendências). Desmarque as que devem continuar abertas.
+          </p>
+        </div>
+        <Badge tom="success">{marcadas} para finalizar</Badge>
+      </div>
+      {suspeito && (
+        <div className="flex items-start gap-2 border-b border-warning/30 bg-warning/[0.08] px-4 py-3 text-[13px] text-warning">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            Atenção: {lista.length} de {totalAbertas} NCs abertas ficaram de fora. Confira se enviou <b>os dois arquivos</b> (execução e verificação) antes de confirmar.
+          </span>
+        </div>
+      )}
+      <div className="flex flex-wrap items-center gap-2 border-b border-success/20 bg-card/60 p-3 text-[13px]">
+        <Button size="sm" variant="ghost" onClick={() => lista.forEach((n) => mudar(n.nc_id, { finalizar: true }))}>
+          Marcar todas
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => lista.forEach((n) => mudar(n.nc_id, { finalizar: false }))}>
+          Desmarcar todas
+        </Button>
+        <span className="ml-auto text-muted">Data de execução para as vazias:</span>
+        <Input type="date" value={dataTodas} max={hojeISO()} onChange={(e) => setDataTodas(e.target.value)} className="w-[170px]" />
+        <Button size="sm" variant="secondary" disabled={!dataTodas} onClick={() => lista.forEach((n) => !decisoes[n.nc_id]?.data && mudar(n.nc_id, { data: dataTodas }))}>
+          Preencher
+        </Button>
+      </div>
+      <ul className="max-h-[480px] divide-y divide-line/60 overflow-auto">
+        {lista.map((n, i) => {
+          const d = decisoes[n.nc_id] ?? { finalizar: true, data: '' };
+          return (
+            <motion.li
+              key={n.nc_id}
+              initial={{ opacity: 0, x: -14 }}
+              animate={{ opacity: d.finalizar ? 1 : 0.55, x: 0 }}
+              transition={{ type: 'spring', stiffness: 380, damping: 30, delay: Math.min(i, 14) * 0.03 }}
+              className="flex flex-wrap items-center gap-x-3 gap-y-2 bg-card/40 px-4 py-3 text-[13px]"
+            >
+              <input type="checkbox" checked={d.finalizar} onChange={(e) => mudar(n.nc_id, { finalizar: e.target.checked })} className="h-4 w-4 accent-[#16A34A]" aria-label={`Finalizar NC ${n.nc_id}`} />
+              <Link to={`/ncs/${n.nc_id}`} target="_blank" className="tabular w-[72px] font-semibold hover:text-brand">
+                NC {n.nc_id}
+              </Link>
+              <span className="min-w-0 flex-1 truncate">
+                {n.titulo} <span className="text-muted">· {n.area}</span>
+              </span>
+              <EtapaBadge etapa={n.etapa} curto />
+              <span className="tabular text-muted">prazo {fmtData(n.prazo)}</span>
+              <Input
+                type="date"
+                value={d.data}
+                max={hojeISO()}
+                disabled={!d.finalizar}
+                onChange={(e) => mudar(n.nc_id, { data: e.target.value })}
+                className={cn('h-8 w-[160px] text-[13px]', d.finalizar && !d.data && 'border-warning/60')}
+                aria-label={`Data de execução da NC ${n.nc_id}`}
+              />
+            </motion.li>
+          );
+        })}
+      </ul>
+      {semData > 0 && <p className="border-t border-success/20 px-4 py-2.5 text-[12px] text-warning">{semData} marcada(s) sem data de execução: serão finalizadas e ficarão em Pendências para completar.</p>}
+    </motion.div>
   );
 }
 
@@ -229,12 +331,14 @@ function Contagens({ r }: { r: ResultadoImportacao }) {
 function Problemas({ r }: { r: ResultadoImportacao }) {
   const lista = [...r.erros.map((e) => ({ ...e, tipo: 'erro' as const })), ...r.avisos.map((e) => ({ ...e, tipo: 'aviso' as const }))];
   if (!lista.length) return null;
+  const temArquivo = new Set(lista.map((e) => e.arquivo).filter(Boolean)).size > 1;
   return (
     <div className="mt-4 max-h-72 overflow-auto rounded-2xl border border-line">
       <table className="w-full text-[13px]">
         <thead className="sticky top-0 bg-card">
           <tr className="border-b border-line text-[12px] text-muted">
             <th className="px-3 py-2 text-left font-medium">Tipo</th>
+            {temArquivo && <th className="px-3 py-2 text-left font-medium">Arquivo</th>}
             <th className="px-3 py-2 text-left font-medium">Linha</th>
             <th className="px-3 py-2 text-left font-medium">NC ID</th>
             <th className="px-3 py-2 text-left font-medium">Detalhe</th>
@@ -244,6 +348,7 @@ function Problemas({ r }: { r: ResultadoImportacao }) {
           {lista.map((e, i) => (
             <tr key={i} className="border-b border-line/50 last:border-0">
               <td className="px-3 py-2">{e.tipo === 'erro' ? <Badge tom="danger">Erro</Badge> : <Badge tom="warning">Aviso</Badge>}</td>
+              {temArquivo && <td className="max-w-[160px] truncate px-3 py-2 text-muted">{e.arquivo}</td>}
               <td className="tabular px-3 py-2">{e.linha}</td>
               <td className="tabular px-3 py-2">{e.nc_id || '—'}</td>
               <td className="px-3 py-2 text-muted">{e.msg}</td>
@@ -262,9 +367,15 @@ export default function Importar() {
   const toast = useToast();
   const { atualizarSessao } = useAuth();
   const input = useRef<HTMLInputElement>(null);
-  const [arquivo, setArquivo] = useState<File | null>(null);
-  const [linhas, setLinhas] = useState<Linha[]>([]);
-  const [aba, setAba] = useState('');
+  const [partes, setPartes] = useState<{ nome: string; aba: string; linhas: Linha[] }[]>([]);
+  const nomes = partes.map((p) => p.nome).join(' + ');
+  const totalLinhas = partes.reduce((t, p) => t + p.linhas.length, 0);
+  const [conferir, setConferir] = useState(false);
+  const [ausentes, setAusentes] = useState<{ itens: Ausente[]; totalAbertas: number } | null>(null);
+  const [carregandoAusentes, setCarregandoAusentes] = useState(false);
+  const [decAusentes, setDecAusentes] = useState<Record<number, DecisaoAusente>>({});
+  const mudarAusente = (id: number, d: Partial<DecisaoAusente>) =>
+    setDecAusentes((x) => ({ ...x, [id]: { ...(x[id] ?? { finalizar: true, data: '' }), ...d } }));
   const [fase, setFase] = useState<'inicio' | 'lendo' | 'preview' | 'importando' | 'fim'>('inicio');
   const [previa, setPrevia] = useState<ResultadoImportacao | null>(null);
   const [resultado, setResultado] = useState<ResultadoImportacao | null>(null);
@@ -288,39 +399,77 @@ export default function Importar() {
     atualizarSessao();
   }
 
-  async function escolher(f: File) {
+  async function escolher(lista: FileList | File[] | null) {
+    const arquivos = Array.from(lista ?? []).filter((f) => /\.(xlsx|xls|csv)$/i.test(f.name)).slice(0, 5);
+    if (!arquivos.length) return;
     setErro(null);
-    setArquivo(f);
     setFase('lendo');
     setProgresso(0);
     try {
-      const r = await lerPlanilha(f);
-      if (!r.linhas.length) throw new Error('A planilha está vazia.');
-      setLinhas(r.linhas);
-      setAba(r.aba);
+      const lidas: { nome: string; aba: string; linhas: Linha[] }[] = [];
+      for (const f of arquivos) {
+        const r = await lerPlanilha(f);
+        if (!r.linhas.length) throw new Error(`A planilha “${f.name}” está vazia.`);
+        lidas.push({ nome: f.name, aba: r.aba, linhas: r.linhas });
+      }
+      setPartes(lidas);
       let acc = VAZIO;
-      const ls = lotes(r.linhas);
-      for (let i = 0; i < ls.length; i++) {
-        acc = somar(acc, await api<ResultadoImportacao>('importar', { etapa: 'preview', linhas: ls[i], linhaInicial: i * LOTE + 2 }));
-        setProgresso(Math.round(((i + 1) / ls.length) * 100));
+      const total = lidas.reduce((t, p) => t + Math.ceil(p.linhas.length / LOTE), 0);
+      let feitos = 0;
+      for (const p of lidas) {
+        const ls = lotes(p.linhas);
+        for (let i = 0; i < ls.length; i++) {
+          const r = await api<ResultadoImportacao>('importar', { etapa: 'preview', linhas: ls[i], linhaInicial: i * LOTE + 2 });
+          const marcar = <T extends object>(l: T[]) => l.map((e) => ({ ...e, arquivo: p.nome }));
+          acc = somar(acc, { ...r, erros: marcar(r.erros), avisos: marcar(r.avisos) });
+          setProgresso(Math.round((++feitos / total) * 100));
+        }
       }
       setDecisoes({});
       setNotificar(true);
+      setDecAusentes({});
+      setAusentes(null);
       setPrevia(acc);
       setFase('preview');
+      const conf = lidas.length > 1;
+      setConferir(conf);
+      if (conf) void buscarAusentes(acc.ids ?? []);
     } catch (e) {
       setErro(mensagemErro(e));
       setFase('inicio');
     }
   }
 
+  async function buscarAusentes(ids: number[]) {
+    setCarregandoAusentes(true);
+    try {
+      const r = await api<{ itens: Ausente[]; total: number; totalAbertas: number }>('importar', { etapa: 'ausentes', ids });
+      const dec: Record<number, DecisaoAusente> = {};
+      r.itens.forEach((n) => (dec[n.nc_id] = { finalizar: true, data: n.data_execucao ? n.data_execucao.slice(0, 10) : '' }));
+      setDecAusentes(dec);
+      setAusentes({ itens: r.itens, totalAbertas: r.totalAbertas });
+    } catch (e) {
+      setErro(mensagemErro(e));
+      setConferir(false);
+    } finally {
+      setCarregandoAusentes(false);
+    }
+  }
+
+  function alternarConferir(v: boolean) {
+    setConferir(v);
+    if (v && !ausentes && previa) void buscarAusentes(previa.ids ?? []);
+  }
+
+  const aFinalizar = conferir && ausentes ? ausentes.itens.filter((n) => decAusentes[n.nc_id]?.finalizar) : [];
+
   async function confirmar() {
-    if (!arquivo) return;
+    if (!partes.length) return;
     setErro(null);
     setFase('importando');
     setProgresso(0);
     try {
-      const { id } = await api<{ id: string }>('importar', { etapa: 'iniciar', arquivo: arquivo.name });
+      const { id } = await api<{ id: string }>('importar', { etapa: 'iniciar', arquivo: nomes });
       const motivos: Record<number, string> = {};
       const manter: Record<number, boolean> = {};
       for (const r of retomadas) {
@@ -329,18 +478,29 @@ export default function Importar() {
         else motivos[r.nc_id] = d?.motivo.trim() ?? '';
       }
       let acc = VAZIO;
-      const ls = lotes(linhas);
-      for (let i = 0; i < ls.length; i++) {
-        acc = somar(acc, await api<ResultadoImportacao>('importar', { etapa: 'lote', id, linhas: ls[i], linhaInicial: i * LOTE + 2, motivos, manter }));
-        setProgresso(Math.round(((i + 1) / ls.length) * 100));
+      const total = partes.reduce((t, p) => t + Math.ceil(p.linhas.length / LOTE), 0) + (aFinalizar.length ? 1 : 0);
+      let feitos = 0;
+      for (const p of partes) {
+        const ls = lotes(p.linhas);
+        for (let i = 0; i < ls.length; i++) {
+          acc = somar(acc, await api<ResultadoImportacao>('importar', { etapa: 'lote', id, linhas: ls[i], linhaInicial: i * LOTE + 2, motivos, manter }));
+          setProgresso(Math.round((++feitos / total) * 100));
+        }
+      }
+      if (aFinalizar.length) {
+        const f = await api<{ finalizadas: number; semData: number }>('importar', {
+          etapa: 'finalizarAusentes', id, itens: aFinalizar.map((n) => ({ nc_id: n.nc_id, data_execucao: decAusentes[n.nc_id]?.data || undefined })),
+        });
+        acc = { ...acc, finalizadas: f.finalizadas, finalizadasSemData: f.semData };
+        setProgresso(100);
       }
       const fim = await api<{ emails?: number }>('importar', {
-        etapa: 'finalizar', id, arquivo: arquivo.name, novas: acc.novas, atualizadas: acc.atualizadas, erros: acc.totalErros,
+        etapa: 'finalizar', id, arquivo: nomes, novas: acc.novas, atualizadas: acc.atualizadas + (acc.finalizadas ?? 0), erros: acc.totalErros,
         notificar, novasIds: acc.novasIds, retomadas: acc.retomadas, prorrogacoes: acc.prorrogacoes,
       });
       setResultado({ ...acc, emails: notificar ? fim.emails ?? 0 : undefined });
       setFase('fim');
-      toast({ tipo: 'sucesso', titulo: 'Importação concluída', descricao: `${acc.novas} nova(s) e ${acc.atualizadas} atualizada(s).` });
+      toast({ tipo: 'sucesso', titulo: 'Importação concluída', descricao: `${acc.novas} nova(s), ${acc.atualizadas} atualizada(s)${acc.finalizadas ? ` e ${acc.finalizadas} finalizada(s)` : ''}.` });
       concluir();
     } catch (e) {
       setErro(`${mensagemErro(e)} — a importação foi interrompida; as linhas já enviadas foram gravadas. Você pode importar o mesmo arquivo de novo com segurança (não duplica).`);
@@ -356,7 +516,7 @@ export default function Importar() {
       const r = await api<ResultadoImportacao>('importar', { etapa: 'reprocessarEntrada', limpar: true, notificar: notificarEntrada });
       setResultado(r);
       setFase('fim');
-      setArquivo(null);
+      setPartes([]);
       concluir();
     } catch (e) {
       setErro(mensagemErro(e));
@@ -366,8 +526,10 @@ export default function Importar() {
   }
 
   function reiniciar() {
-    setArquivo(null);
-    setLinhas([]);
+    setPartes([]);
+    setAusentes(null);
+    setDecAusentes({});
+    setConferir(false);
     setPrevia(null);
     setResultado(null);
     setDecisoes({});
@@ -394,26 +556,27 @@ export default function Importar() {
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
               e.preventDefault();
-              const f = e.dataTransfer.files[0];
-              if (f) escolher(f);
+              void escolher(e.dataTransfer.files);
             }}
             className="group flex w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed border-line px-6 py-14 text-center transition-all duration-300 hover:border-brand/50 hover:bg-brand/[0.03]"
           >
             <div className="grid h-14 w-14 place-items-center rounded-full bg-brand/[0.08] text-brand transition-transform duration-300 group-hover:-translate-y-1 group-hover:scale-110">
               <UploadCloud className="h-6 w-6" />
             </div>
-            <p className="mt-4 font-semibold">Clique ou arraste o arquivo .xlsx aqui</p>
-            <p className="mt-1 text-sm text-muted">A aba “NC” é usada se existir; senão, a primeira aba. Nada é gravado antes da sua confirmação.</p>
+            <p className="mt-4 font-semibold">Clique ou arraste os arquivos .xlsx aqui</p>
+            <p className="mt-1 text-sm text-muted">
+              Pode enviar <b className="text-fg">os dois juntos</b> (execução + verificação) — assim o portal confere quais NCs abertas foram finalizadas. Nada é gravado antes da sua confirmação.
+            </p>
           </button>
         )}
         <input
           ref={input}
           type="file"
           accept=".xlsx,.xls,.csv"
+          multiple
           className="hidden"
           onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) escolher(f);
+            void escolher(e.target.files);
             e.target.value = '';
           }}
         />
@@ -422,7 +585,7 @@ export default function Importar() {
           <div className="py-10 text-center">
             <p className="font-semibold">{fase === 'lendo' ? 'Analisando o arquivo…' : 'Importando…'}</p>
             <p className="mt-1 text-sm text-muted">
-              {arquivo?.name} · {linhas.length || '…'} linhas
+              {nomes || '…'} · {totalLinhas || '…'} linhas
             </p>
             <div className="mx-auto mt-5 h-2 max-w-md overflow-hidden rounded-full bg-elevated" role="progressbar" aria-valuenow={progresso} aria-valuemin={0} aria-valuemax={100}>
               <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${Math.max(progresso, 4)}%` }} />
@@ -436,9 +599,9 @@ export default function Importar() {
             <div className="mb-5 flex flex-wrap items-center gap-3">
               <FileSpreadsheet className="h-5 w-5 text-success" />
               <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold">{arquivo?.name}</p>
+                <p className="truncate font-semibold">{partes.length > 1 ? `${partes.length} arquivos` : nomes}</p>
                 <p className="text-[13px] text-muted">
-                  Aba “{aba}” · {linhas.length} linhas · pré-visualização (nada foi gravado ainda)
+                  {partes.map((p) => (partes.length > 1 ? `${p.nome} (${p.linhas.length})` : `Aba “${p.aba}” · ${p.linhas.length} linhas`)).join(' · ')} · pré-visualização (nada foi gravado ainda)
                 </p>
               </div>
             </div>
@@ -446,6 +609,22 @@ export default function Importar() {
             <Problemas r={previa} />
             {(previa.prorrogacoes?.length ?? 0) > 0 && <ProrrogacoesRespondidas itens={previa.prorrogacoes ?? []} />}
             {retomadas.length > 0 && <Retomadas itens={retomadas} decisoes={decisoes} mudar={mudarDecisao} />}
+            <label className={cn('mt-5 flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition-colors', conferir ? 'border-success/40 bg-success/[0.04]' : 'border-line')}>
+              <input type="checkbox" checked={conferir} onChange={(e) => alternarConferir(e.target.checked)} className="mt-1 h-4 w-4 accent-[#16A34A]" />
+              <span className="flex-1">
+                <span className="flex items-center gap-2 font-semibold">
+                  <CheckCheck className="h-4 w-4 text-success" /> Estes arquivos têm todas as NCs abertas (execução + verificação)
+                </span>
+                <span className="mt-0.5 block text-[13px] text-muted">O portal lista as NCs abertas que não vieram em nenhum arquivo para você finalizar. Deixe desmarcado se enviou só parte das NCs.</span>
+              </span>
+            </label>
+            <AnimatePresence initial={false}>
+              {conferir && (
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                  <Ausentes lista={ausentes?.itens ?? []} totalAbertas={ausentes?.totalAbertas ?? 0} decisoes={decAusentes} mudar={mudarAusente} carregando={carregandoAusentes || !ausentes} />
+                </motion.div>
+              )}
+            </AnimatePresence>
             <AvisarPorEmail ativo={notificar} mudar={setNotificar} r={previa} />
             <p className="mt-4 text-[13px] text-muted">
               Áreas já classificadas e planos de ação preenchidos no portal são preservados. Comentários e anexos não são afetados. Linhas com erro são ignoradas.
@@ -455,8 +634,8 @@ export default function Importar() {
                 Cancelar
               </Button>
               {faltaMotivo && <span className="self-center text-[12px] text-warning">Informe o motivo de todas as retomadas</span>}
-              <Button onClick={confirmar} disabled={(!previa.novas && !previa.atualizadas) || faltaMotivo}>
-                Confirmar importação ({previa.novas + previa.atualizadas})
+              <Button onClick={confirmar} disabled={(!previa.novas && !previa.atualizadas && !aFinalizar.length) || faltaMotivo || (conferir && carregandoAusentes)}>
+                Confirmar importação ({previa.novas + previa.atualizadas}{aFinalizar.length ? ` + ${aFinalizar.length} a finalizar` : ''})
               </Button>
             </div>
           </div>
@@ -477,6 +656,12 @@ export default function Importar() {
                 </motion.span>
                 {resultado.emails ? `${resultado.emails} e-mail(s) de aviso enviados aos responsáveis.` : 'Nenhum e-mail precisou ser enviado (sem responsáveis cadastrados para essas áreas, ou nada novo).'}
               </motion.div>
+            )}
+            {!!resultado.finalizadas && (
+              <Aviso tom="success" className="mt-4">
+                {resultado.finalizadas} NC(s) finalizada(s) por não constarem mais nos arquivos de abertas.
+                {resultado.finalizadasSemData ? ` ${resultado.finalizadasSemData} sem data de execução — complete em Pendências.` : ''}
+              </Aviso>
             )}
             {!!resultado.totalProrrogacoes && (
               <Aviso tom="info" className="mt-4">

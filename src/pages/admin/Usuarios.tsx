@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Copy, MailPlus, Pencil, Plus, ShieldCheck } from 'lucide-react';
+import { Copy, Eye, EyeOff, KeyRound, MailPlus, Pencil, Plus, ShieldCheck, Trash2, Wand2 } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { useAuth } from '@/context/AuthContext';
 import { api, mensagemErro } from '@/lib/api';
 import type { UsuarioAdmin } from '@/lib/types';
 import { cn, fmtDataHora, iniciais } from '@/lib/utils';
@@ -27,6 +29,9 @@ export default function Usuarios() {
   const [link, setLink] = useState<{ nome: string; link: string; enviado: boolean } | null>(null);
   const [convidando, setConvidando] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const { usuario: eu } = useAuth();
+  const [senhaDe, setSenhaDe] = useState<UsuarioAdmin | null>(null);
+  const [removerU, setRemoverU] = useState<UsuarioAdmin | null>(null);
 
   async function salvar() {
     if (!form) return;
@@ -88,7 +93,7 @@ export default function Usuarios() {
                   <th className="px-3 py-3 text-left font-medium">Perfil / áreas</th>
                   <th className="px-3 py-3 text-left font-medium">Situação</th>
                   <th className="px-3 py-3 text-left font-medium">Último acesso</th>
-                  <th className="px-5 py-3 text-right font-medium">Ações</th>
+                  <th className="py-3 pl-2 pr-5 text-right font-medium">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -123,14 +128,28 @@ export default function Usuarios() {
                       {!u.ativo ? <Badge>Inativo</Badge> : u.temSenha ? <Badge tom="success">Ativo</Badge> : <Badge tom="warning">Aguardando senha</Badge>}
                     </td>
                     <td className="tabular whitespace-nowrap px-3 py-3 text-muted">{u.ultimo_acesso ? fmtDataHora(u.ultimo_acesso) : 'Nunca'}</td>
-                    <td className="whitespace-nowrap px-5 py-3 text-right">
+                    <td className="whitespace-nowrap py-3 pl-2 pr-3 text-right">
                       {u.ativo && (
                         <Button variant="ghost" size="sm" loading={convidando === u.id} onClick={() => convidar(u)} title="Enviar link para criar/redefinir senha">
                           <MailPlus className="h-4 w-4" /> {u.temSenha ? 'Redefinir' : 'Convidar'}
                         </Button>
                       )}
                       <Button variant="ghost" size="sm" onClick={() => { setErro(null); setForm({ id: u.id, nome: u.nome, email: u.email, tr: u.tr, perfil: u.perfil, ativo: u.ativo, areas: u.areas, enviarConvite: false }); }}>
-                        <Pencil className="h-4 w-4" /> Editar
+                        <Pencil className="h-4 w-4" /> <span className="hidden xl:inline">Editar</span>
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setSenhaDe(u)} title="Alterar senha" aria-label={`Alterar senha de ${u.nome}`}>
+                        <KeyRound className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setRemoverU(u)}
+                        title="Remover usuário"
+                        aria-label={`Remover ${u.nome}`}
+                        className={cn('text-danger hover:bg-danger/10 hover:text-danger', u.id === eu?.id && 'invisible')}
+                        disabled={u.id === eu?.id}
+                      >
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </td>
                   </tr>
@@ -213,6 +232,18 @@ export default function Usuarios() {
         </Dialog>
       )}
 
+      <DefinirSenha u={senhaDe} fechar={() => setSenhaDe(null)} />
+      <RemoverUsuario
+        u={removerU}
+        fechar={() => setRemoverU(null)}
+        removido={(u) => {
+          qc.invalidateQueries({ queryKey: ['usuarios'] });
+          qc.invalidateQueries({ queryKey: ['areas-admin'] });
+          qc.invalidateQueries({ queryKey: ['pendencias'] });
+          toast({ tipo: 'sucesso', titulo: 'Usuário removido', descricao: u.nome });
+        }}
+      />
+
       {link && (
         <Dialog open onClose={() => setLink(null)} title="Link de acesso gerado" size="sm" footer={<Button onClick={() => setLink(null)}>Fechar</Button>}>
           <p className="text-sm text-muted">
@@ -232,5 +263,170 @@ export default function Usuarios() {
         </Dialog>
       )}
     </div>
+  );
+}
+
+function gerarSenha() {
+  const letras = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ';
+  const nums = '23456789';
+  const todos = letras + nums;
+  const a = new Uint32Array(10);
+  crypto.getRandomValues(a);
+  let s = Array.from(a, (n) => todos[n % todos.length]).join('');
+  s = s.slice(0, 8) + letras[a[8] % letras.length] + nums[a[9] % nums.length];
+  return s;
+}
+
+/** Admin define a senha de um usuário (ex.: quem esqueceu e não recebe o e-mail). */
+function DefinirSenha({ u, fechar }: { u: UsuarioAdmin | null; fechar: () => void }) {
+  const toast = useToast();
+  const [senha, setSenha] = useState('');
+  const [ver, setVer] = useState(true);
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const [feito, setFeito] = useState(false);
+  const [aberto, setAberto] = useState<string | null>(null);
+  if (u && aberto !== u.id) {
+    setAberto(u.id);
+    setSenha('');
+    setErro(null);
+    setFeito(false);
+  }
+  const valida = senha.length >= 8 && /[A-Za-z]/.test(senha) && /\d/.test(senha);
+  async function salvar() {
+    if (!u) return;
+    setSalvando(true);
+    setErro(null);
+    try {
+      await api('usuarios.definirSenha', { id: u.id, senha });
+      setFeito(true);
+      toast({ tipo: 'sucesso', titulo: 'Senha alterada', descricao: u.nome });
+    } catch (e) {
+      setErro(mensagemErro(e));
+    } finally {
+      setSalvando(false);
+    }
+  }
+  const sair = () => {
+    setAberto(null);
+    fechar();
+  };
+  return (
+    <Dialog
+      open={!!u}
+      onClose={sair}
+      size="sm"
+      title={feito ? 'Senha alterada' : `Alterar senha · ${u?.nome ?? ''}`}
+      description={feito ? undefined : 'Defina a nova senha e passe para a pessoa por um canal seguro. Ela pode trocar depois em “Configurações da conta”.'}
+      footer={
+        feito ? (
+          <Button onClick={sair}>Fechar</Button>
+        ) : (
+          <>
+            <Button variant="secondary" onClick={sair} disabled={salvando}>
+              Cancelar
+            </Button>
+            <Button variant="brand" onClick={salvar} loading={salvando} disabled={!valida}>
+              <KeyRound className="h-4 w-4" /> Salvar senha
+            </Button>
+          </>
+        )
+      }
+    >
+      <AnimatePresence mode="wait" initial={false}>
+        {feito ? (
+          <motion.div key="ok" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-3 text-sm">
+            <p className="text-muted">
+              A nova senha de <b className="text-fg">{u?.nome}</b> ({u?.email}) é:
+            </p>
+            <div className="flex gap-2">
+              <Input readOnly value={senha} onFocus={(e) => e.target.select()} className="tabular font-semibold tracking-wider" />
+              <Button variant="secondary" size="icon" onClick={() => navigator.clipboard?.writeText(senha).then(() => toast({ tipo: 'sucesso', titulo: 'Senha copiada' })).catch(() => {})} aria-label="Copiar senha">
+                <Copy className="h-4 w-4" />
+              </Button>
+            </div>
+            <p className="text-[12px] text-muted">As sessões abertas dessa pessoa foram encerradas; ela precisa entrar de novo com a senha nova.</p>
+          </motion.div>
+        ) : (
+          <motion.div key="form" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
+            <Field label="Nova senha" hint="Mínimo 8 caracteres, com letras e números.">
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Input type={ver ? 'text' : 'password'} value={senha} onChange={(e) => setSenha(e.target.value)} className="pr-10 tracking-wide" autoComplete="new-password" autoFocus />
+                  <button type="button" onClick={() => setVer((v) => !v)} className="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full text-muted hover:text-fg" aria-label={ver ? 'Ocultar senha' : 'Mostrar senha'}>
+                    {ver ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                <Button variant="secondary" onClick={() => { setSenha(gerarSenha()); setVer(true); }} title="Gerar senha aleatória">
+                  <Wand2 className="h-4 w-4" /> Gerar
+                </Button>
+              </div>
+            </Field>
+            {erro && <Aviso>{erro}</Aviso>}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </Dialog>
+  );
+}
+
+/** Remoção definitiva (comentários e histórico ficam, com o nome marcado como “removido”). */
+function RemoverUsuario({ u, fechar, removido }: { u: UsuarioAdmin | null; fechar: () => void; removido: (u: UsuarioAdmin) => void }) {
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  async function remover() {
+    if (!u) return;
+    setSalvando(true);
+    setErro(null);
+    try {
+      await api('usuarios.remover', { id: u.id });
+      removido(u);
+      fechar();
+    } catch (e) {
+      setErro(mensagemErro(e));
+    } finally {
+      setSalvando(false);
+    }
+  }
+  return (
+    <Dialog
+      open={!!u}
+      onClose={() => { if (!salvando) { setErro(null); fechar(); } }}
+      size="sm"
+      title="Remover usuário?"
+      footer={
+        <>
+          <Button variant="secondary" onClick={() => { setErro(null); fechar(); }} disabled={salvando}>
+            Cancelar
+          </Button>
+          <Button variant="danger" onClick={remover} loading={salvando}>
+            <Trash2 className="h-4 w-4" /> Remover
+          </Button>
+        </>
+      }
+    >
+      {u && (
+        <div className="space-y-3 text-sm">
+          <div className="flex items-center gap-3 rounded-xl bg-elevated p-3">
+            <span className="grid h-10 w-10 place-items-center rounded-full bg-danger/10 font-semibold text-danger">{iniciais(u.nome)}</span>
+            <div className="min-w-0">
+              <p className="truncate font-semibold">{u.nome}</p>
+              <p className="truncate text-[12px] text-muted">{u.email}</p>
+            </div>
+          </div>
+          <p className="text-muted">
+            A pessoa perde o acesso na hora e sai da lista. Comentários e histórico continuam nas NCs, com o nome marcado como “(removido)”.
+            {u.areas.length > 0 && (
+              <>
+                {' '}
+                As áreas <b className="text-fg">{u.areas.join(', ')}</b> podem ficar sem responsável.
+              </>
+            )}
+          </p>
+          <p className="text-[12px] text-muted">Se a pessoa pode voltar, prefira <b>Editar › desativar</b>.</p>
+          {erro && <Aviso>{erro}</Aviso>}
+        </div>
+      )}
+    </Dialog>
   );
 }

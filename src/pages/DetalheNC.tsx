@@ -3,10 +3,10 @@ import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion, useMotionValueEvent, useScroll } from 'framer-motion';
 import { useToast } from '@/components/Toast';
-import { ArrowLeft, Check, Download, FileText, MessageSquare, Paperclip, Pencil, Send, Upload } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, CheckCircle2, Download, FileText, MessageSquare, Paperclip, Pencil, RotateCcw, Send, SendHorizontal, Undo2, Upload } from 'lucide-react';
 import { api, arquivoParaBase64, baixarBase64, mensagemErro } from '@/lib/api';
-import type { DetalheNC as DetalheT, NC } from '@/lib/types';
-import { cn, fmtData, fmtDataHora, iniciais } from '@/lib/utils';
+import type { DetalheNC as DetalheT, Etapa, NC } from '@/lib/types';
+import { cn, fmtData, fmtDataHora, hojeISO, iniciais } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { useOpcoesFiltro, useTitulo } from '@/hooks/queries';
 import { Aviso, Badge, Button, Card, CardHeader, Dialog, EmptyState, ErrorState, Field, Input, Select, Skeleton, Tabs, Textarea } from '@/components/ui';
@@ -141,6 +141,87 @@ function EditarNC({ nc, aberto, fechar, salvar, salvando, erro }: { nc: NC; aber
       </div>
       {erro && <Aviso className="mt-4">{erro}</Aviso>}
     </Dialog>
+  );
+}
+
+
+type AcaoEtapa = { destino: Etapa; titulo: string; descricao: string; botao: string; motivo: boolean; data: boolean; variante: 'brand' | 'primary' | 'danger' | 'secondary' };
+
+const ACOES_ETAPA: Record<Etapa, AcaoEtapa[]> = {
+  'EXECUÇÃO': [
+    { destino: 'VERIFICAÇÃO', titulo: 'Enviar para verificação', descricao: 'A Unigás concluiu a execução. A NC passa a aguardar a verificação da Comgás.', botao: 'Enviar para verificação', motivo: false, data: true, variante: 'brand' },
+  ],
+  'VERIFICAÇÃO': [
+    { destino: 'FINALIZADO', titulo: 'Aprovar e finalizar', descricao: 'A Comgás aprovou a execução. A NC será encerrada e contará no Relatório Mensal.', botao: 'Aprovar e finalizar', motivo: false, data: false, variante: 'primary' },
+    { destino: 'EXECUÇÃO', titulo: 'Reprovar e voltar para execução', descricao: 'A Comgás reprovou a execução. A NC volta para a Unigás e a data da execução é apagada.', botao: 'Reprovar', motivo: true, data: false, variante: 'danger' },
+  ],
+  FINALIZADO: [
+    { destino: 'VERIFICAÇÃO', titulo: 'Reabrir NC', descricao: 'A NC volta para "Em verificação c/ Comgás". Use quando ela foi finalizada por engano.', botao: 'Reabrir', motivo: true, data: false, variante: 'secondary' },
+  ],
+};
+
+function FluxoEtapa({ nc, onFeito }: { nc: NC; onFeito: (d: DetalheT, acao: AcaoEtapa) => void }) {
+  const toast = useToast();
+  const [acao, setAcao] = useState<AcaoEtapa | null>(null);
+  const [motivo, setMotivo] = useState('');
+  const [data, setData] = useState('');
+  const mut = useMutation({
+    mutationFn: (a: AcaoEtapa) => api<DetalheT>('mudarEtapa', { nc_id: nc.nc_id, etapa: a.destino, motivo: motivo.trim() || undefined, data_execucao: a.data ? data : undefined }),
+    onSuccess: (d, a) => {
+      setAcao(null);
+      onFeito(d, a);
+    },
+    onError: (e) => toast({ tipo: 'erro', titulo: 'Não foi possível mudar a etapa', descricao: mensagemErro(e) }),
+  });
+  const abrir = (a: AcaoEtapa) => {
+    setMotivo('');
+    setData(hojeISO());
+    setAcao(a);
+  };
+  const icone = (d: Etapa) => (d === 'FINALIZADO' ? <CheckCircle2 className="h-4 w-4" /> : d === 'VERIFICAÇÃO' && nc.etapa === 'EXECUÇÃO' ? <SendHorizontal className="h-4 w-4" /> : d === 'EXECUÇÃO' ? <Undo2 className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />);
+  return (
+    <>
+      {ACOES_ETAPA[nc.etapa]?.map((a) => (
+        <Button key={a.destino} size="sm" variant={a.variante} onClick={() => abrir(a)}>
+          {icone(a.destino)} {a.botao}
+        </Button>
+      ))}
+      <Dialog
+        open={!!acao}
+        onClose={() => setAcao(null)}
+        title={acao ? `${acao.titulo} · NC ${nc.nc_id}` : ''}
+        description={acao?.descricao}
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setAcao(null)}>
+              Cancelar
+            </Button>
+            <Button variant={acao?.variante === 'danger' ? 'brand' : 'primary'} loading={mut.isPending} disabled={!!acao?.motivo && !motivo.trim()} onClick={() => acao && mut.mutate(acao)}>
+              Confirmar
+            </Button>
+          </>
+        }
+      >
+        {acao && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-[13px]">
+              <EtapaBadge etapa={nc.etapa} curto />
+              <ArrowRight className="h-4 w-4 text-muted" />
+              <EtapaBadge etapa={acao.destino} curto />
+            </div>
+            {acao.data && (
+              <Field label="Data da execução" hint="Dia em que a Unigás concluiu o serviço. Define se a NC foi executada no prazo.">
+                <Input type="date" value={data} max={hojeISO()} onChange={(e) => setData(e.target.value)} />
+              </Field>
+            )}
+            <Field label={acao.motivo ? 'Motivo (obrigatório)' : 'Observação (opcional)'} hint="Fica registrado nos comentários da NC.">
+              <Textarea rows={3} value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder={acao.destino === 'EXECUÇÃO' ? 'Ex.: a Comgás pediu foto da placa do veículo com o equipamento instalado.' : ''} />
+            </Field>
+          </div>
+        )}
+      </Dialog>
+    </>
   );
 }
 
@@ -282,9 +363,20 @@ export default function DetalheNC() {
             </div>
           </div>
           {podeEditarTudo && (
-            <Button variant="secondary" size="sm" onClick={() => { setErro(null); setEditar(true); }}>
-              <Pencil className="h-3.5 w-3.5" /> Editar
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <FluxoEtapa
+                nc={nc}
+                onFeito={(d, a) => {
+                  qc.setQueryData(chave, d);
+                  invalidarListas();
+                  setAba('comentarios');
+                  toast({ tipo: 'sucesso', titulo: a.titulo, descricao: `NC ${nc.nc_id} agora está em “${a.destino === 'EXECUÇÃO' ? 'Em execução c/ Unigás' : a.destino === 'VERIFICAÇÃO' ? 'Em verificação c/ Comgás' : 'Finalizado'}”.` });
+                }}
+              />
+              <Button variant="secondary" size="sm" onClick={() => { setErro(null); setEditar(true); }}>
+                <Pencil className="h-3.5 w-3.5" /> Editar
+              </Button>
+            </div>
           )}
         </div>
         <div className="mt-8">

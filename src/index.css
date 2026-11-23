@@ -235,3 +235,11 @@
 /* Linha de brilho que percorre a faixa de destaque */
 @keyframes varrer { from { transform: translateX(-100%); } to { transform: translateX(400%); } }
 .anim-varrer { animation: varrer 3.6s ease-in-out infinite; }
+
+/* Entrada das páginas (v1.3.1): só CSS, termina sempre visível */
+@keyframes pagina-in {
+  from { opacity: 0; transform: translateY(16px); filter: blur(5px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+.anim-pagina { animation: pagina-in 0.42s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+@media (prefers-reduced-motion: reduce) { .anim-pagina { animation: none; } }

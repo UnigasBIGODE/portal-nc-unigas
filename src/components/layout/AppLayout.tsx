@@ -1,5 +1,5 @@
-import { Suspense, useEffect, useRef, useState } from 'react';
-import { Link, NavLink, useLocation, useNavigate, useOutlet } from 'react-router-dom';
+import { Component, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Link, NavLink, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { useIsFetching } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowUp, Bell, ChevronRight, ChevronsLeft, LifeBuoy, LogOut, Menu, Moon, Search, ShieldCheck, Sun, X } from 'lucide-react';
@@ -370,21 +370,47 @@ function Topbar({ abrirMenu, abrirBusca }: { abrirMenu: () => void; abrirBusca: 
 // ---------------------------------------------------------------- transições de página
 
 /** Página que sai desliza e desfoca; a nova entra subindo. */
-function SaidaEntrada({ chave }: { chave: string }) {
-  const outlet = useOutlet();
+function SaidaEntrada({ chave, carregando }: { chave: string; carregando: ReactNode }) {
+  // Animação só em CSS (fill-mode "backwards"): mesmo que seja interrompida, a página
+  // termina sempre visível — nunca fica em branco.
   return (
-    <AnimatePresence mode="wait" initial={false}>
-      <motion.div
-        key={chave}
-        initial={{ opacity: 0, y: 18, filter: 'blur(6px)' }}
-        animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-        exit={{ opacity: 0, y: -10, filter: 'blur(6px)', transition: { duration: 0.16, ease: 'easeIn' } }}
-        transition={{ duration: 0.45, ease: [0.2, 0.8, 0.2, 1] }}
-      >
-        {outlet}
-      </motion.div>
-    </AnimatePresence>
+    <div key={chave} className="anim-pagina">
+      <ProtecaoPagina chave={chave}>
+        <Suspense fallback={carregando}>
+          <Outlet />
+        </Suspense>
+      </ProtecaoPagina>
+    </div>
   );
+}
+
+/** Se uma página falhar, mostra um aviso no lugar dela em vez de deixar a tela em branco. */
+class ProtecaoPagina extends Component<{ chave: string; children: ReactNode }, { erro: Error | null }> {
+  state = { erro: null as Error | null };
+  static getDerivedStateFromError(erro: Error) {
+    return { erro };
+  }
+  componentDidUpdate(ant: { chave: string }) {
+    if (ant.chave !== this.props.chave && this.state.erro) this.setState({ erro: null });
+  }
+  componentDidCatch(erro: Error) {
+    console.error('[Portal NC] erro na página:', erro);
+  }
+  render() {
+    if (!this.state.erro) return this.props.children;
+    const versaoNova = /dynamically imported module|Failed to fetch|Loading chunk|Importing a module/i.test(String(this.state.erro?.message));
+    return (
+      <div className="mx-auto mt-16 max-w-md rounded-2xl border border-line bg-card p-8 text-center shadow-card">
+        <p className="text-[18px] font-semibold">{versaoNova ? 'O portal foi atualizado' : 'Não foi possível abrir esta página'}</p>
+        <p className="mt-2 text-[13px] text-muted">
+          {versaoNova ? 'Recarregue para carregar a versão nova.' : 'Tente recarregar. Se continuar, avise o administrador.'}
+        </p>
+        <button onClick={() => window.location.reload()} className="mt-5 rounded-full bg-brand px-5 py-2 text-[13px] font-semibold text-white">
+          Recarregar
+        </button>
+      </div>
+    );
+  }
 }
 
 /** Botão flutuante de voltar ao topo, aparece depois de rolar a página. */
@@ -456,9 +482,9 @@ export function AppLayout() {
       <div className="transition-[padding] duration-300 ease-out lg:pl-[var(--menu)]">
         <Topbar abrirMenu={() => setMenu(true)} abrirBusca={() => setBusca(true)} />
         <main id="conteudo" className="mx-auto max-w-[1600px] px-4 pb-20 pt-7 sm:px-6 lg:px-10 lg:pt-9">
-          <Suspense
-            fallback={
-              <div className="space-y-4">
+          <SaidaEntrada
+            chave={loc.pathname}
+            carregando={<div className="space-y-4">
                 <Skeleton className="h-9 w-72" />
                 <div className="grid gap-4 md:grid-cols-3">
                   <Skeleton className="h-36" />
@@ -466,11 +492,8 @@ export function AppLayout() {
                   <Skeleton className="h-36" />
                 </div>
                 <Skeleton className="h-80" />
-              </div>
-            }
-          >
-            <SaidaEntrada chave={loc.pathname} />
-          </Suspense>
+              </div>}
+          />
         </main>
       </div>
       <CommandPalette aberto={busca} fechar={() => setBusca(false)} />

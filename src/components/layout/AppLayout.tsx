@@ -197,7 +197,7 @@ function Sidebar({ aberto, fechar, recolhido, alternarRecolhido }: { aberto: boo
         {r && dica && hoverMenu && (
           <motion.span
             key="dica"
-            className="vg-dica-flutuante pointer-events-none fixed z-[70] whitespace-nowrap rounded-[9px] border border-[var(--vg-rim)] bg-[var(--vg-pick)] px-2.5 py-1.5 text-[12px] font-semibold text-[var(--vg-ink)] shadow-[0_3px_10px_rgb(var(--vg-sombra)/0.18)]"
+            className="vg-dica-flutuante pointer-events-none fixed z-[70] whitespace-nowrap rounded-[9px] border border-[var(--vg-rim)] bg-[var(--vg-raised)] px-2.5 py-1.5 text-[12px] font-semibold text-[var(--vg-ink)] backdrop-blur-md shadow-[0_3px_10px_rgb(var(--vg-sombra)/0.18)]"
             style={{ left: LARGURA.recolhido + 10 }}
             initial={{ opacity: 0, x: -6, top: dica.y, y: '-50%' }}
             animate={{ opacity: 1, x: 0, top: dica.y, y: '-50%' }}

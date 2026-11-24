@@ -27,6 +27,7 @@ if (!estado.props.GEMINI_API_KEY) estado.props.GEMINI_API_KEY = 'demo-sem-chave-
 /** Gemini simulado: monta uma resposta a partir dos próprios dados enviados no pedido. */
 function iaDemo(url: string, opts: { payload: string }) {
   if (!/generativelanguage/.test(url)) throw new Error('Indisponível na demonstração');
+  if (!opts.payload) return { getResponseCode: () => 200, getContentText: () => '{"models":[]}' };
   const corpo = JSON.parse(opts.payload) as { contents: { role: string; parts: { text: string }[] }[] };
   const primeiro = corpo.contents[0].parts[0].text;
   const ultimo = corpo.contents[corpo.contents.length - 1].parts[0].text;

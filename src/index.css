@@ -504,7 +504,9 @@
   pointer-events: none;
   white-space: nowrap;
   color: var(--vg-ink);
-  background: var(--vg-pick);
+  background: var(--vg-raised);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   padding: 6px 10px;
   border: 1px solid var(--vg-rim);
   border-radius: 9px;

@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, ArrowRight, CalendarClock, CheckCheck, FileSpreadsheet, Mail, History, RefreshCw, Undo2, UploadCloud } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CalendarClock, CheckCheck, FileSpreadsheet, Mail, History, RefreshCw, Undo2, UploadCloud, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { EtapaBadge } from '@/components/StatusBadges';
@@ -206,6 +206,70 @@ function Ausentes({ lista, totalAbertas, decisoes, mudar, carregando }: {
   );
 }
 
+/** Caixa de upload de uma planilha (execução ou verificação). */
+function CaixaArquivo({ titulo, descricao, cor, indice, arquivo, escolher }: {
+  titulo: string; descricao: string; cor: 'warning' | 'info'; indice: number; arquivo: File | null; escolher: (f: File | null) => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  const [sobre, setSobre] = useState(false);
+  const pegar = (l: FileList | null) => {
+    const f = Array.from(l ?? []).find((x) => /\.(xlsx|xls|csv)$/i.test(x.name));
+    if (f) escolher(f);
+  };
+  const tons = cor === 'warning'
+    ? { borda: 'border-warning/60', fundo: 'bg-warning/[0.06]', icone: 'bg-warning/12 text-warning', ponto: 'bg-warning' }
+    : { borda: 'border-info/60', fundo: 'bg-info/[0.06]', icone: 'bg-info/12 text-info', ponto: 'bg-info' };
+  return (
+    <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: [0.2, 0.8, 0.2, 1], delay: indice * 0.08 }}>
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={`Anexar planilha de ${titulo}`}
+        onClick={() => ref.current?.click()}
+        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && ref.current?.click()}
+        onDragOver={(e) => { e.preventDefault(); setSobre(true); }}
+        onDragLeave={() => setSobre(false)}
+        onDrop={(e) => { e.preventDefault(); setSobre(false); pegar(e.dataTransfer.files); }}
+        className={cn(
+          'group relative flex h-full min-h-[230px] cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-5 py-8 text-center transition-all duration-300',
+          arquivo ? cn('border-solid', tons.borda, tons.fundo) : sobre ? 'scale-[1.01] border-brand/60 bg-brand/[0.04]' : 'border-line hover:border-brand/40 hover:bg-brand/[0.02]',
+        )}
+      >
+        <span className="absolute left-4 top-4 flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wider text-muted">
+          <span className={cn('h-2 w-2 rounded-full', tons.ponto)} /> {indice + 1}. {titulo}
+        </span>
+        <AnimatePresence mode="wait" initial={false}>
+          {arquivo ? (
+            <motion.div key="ok" initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} transition={{ type: 'spring', stiffness: 420, damping: 26 }} className="mt-4 flex flex-col items-center">
+              <div className={cn('grid h-14 w-14 place-items-center rounded-2xl', tons.icone)}>
+                <FileSpreadsheet className="h-7 w-7" />
+              </div>
+              <p className="mt-3 max-w-[280px] truncate font-semibold" title={arquivo.name}>{arquivo.name}</p>
+              <p className="text-[12px] text-muted">{Math.max(1, Math.round(arquivo.size / 1024))} KB · clique para trocar</p>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); escolher(null); }}
+                className="mt-3 inline-flex items-center gap-1 rounded-full px-3 py-1 text-[12px] text-muted transition-colors hover:bg-danger/10 hover:text-danger"
+              >
+                <X className="h-3.5 w-3.5" /> Remover
+              </button>
+            </motion.div>
+          ) : (
+            <motion.div key="vazio" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="mt-4 flex flex-col items-center">
+              <div className="grid h-14 w-14 place-items-center rounded-full bg-brand/[0.08] text-brand transition-transform duration-300 group-hover:-translate-y-1 group-hover:scale-110">
+                <UploadCloud className="h-6 w-6" />
+              </div>
+              <p className="mt-3 font-semibold">Clique ou arraste o .xlsx</p>
+              <p className="mt-1 max-w-[300px] text-[13px] text-muted">{descricao}</p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        <input ref={ref} type="file" accept=".xlsx,.xls,.csv" className="hidden" onClick={(e) => e.stopPropagation()} onChange={(e) => { pegar(e.target.files); e.target.value = ''; }} />
+      </div>
+    </motion.div>
+  );
+}
+
 type Decisao = { acao: 'retomar' | 'manter'; motivo: string };
 
 /** NCs que o arquivo traz de volta para uma etapa anterior: o admin informa o motivo (ou mantém a etapa do portal). */
@@ -366,7 +430,8 @@ export default function Importar() {
   const qc = useQueryClient();
   const toast = useToast();
   const { atualizarSessao } = useAuth();
-  const input = useRef<HTMLInputElement>(null);
+  const [arqExec, setArqExec] = useState<File | null>(null);
+  const [arqVerif, setArqVerif] = useState<File | null>(null);
   const [partes, setPartes] = useState<{ nome: string; aba: string; linhas: Linha[] }[]>([]);
   const nomes = partes.map((p) => p.nome).join(' + ');
   const totalLinhas = partes.reduce((t, p) => t + p.linhas.length, 0);
@@ -517,6 +582,8 @@ export default function Importar() {
       setResultado(r);
       setFase('fim');
       setPartes([]);
+      setArqExec(null);
+      setArqVerif(null);
       concluir();
     } catch (e) {
       setErro(mensagemErro(e));
@@ -530,6 +597,8 @@ export default function Importar() {
     setAusentes(null);
     setDecAusentes({});
     setConferir(false);
+    setArqExec(null);
+    setArqVerif(null);
     setPrevia(null);
     setResultado(null);
     setDecisoes({});
@@ -540,7 +609,7 @@ export default function Importar() {
     <div>
       <PageHeader eyebrow="Administração"
         title="Importar dados do Obrasoft"
-        subtitle="Envie o Excel exportado (mesmo formato da aba “NC”). As NCs são atualizadas pelo NC ID, sem duplicar."
+        subtitle="Anexe as duas planilhas exportadas do Obrasoft (em execução e em verificação). As NCs são atualizadas pelo NC ID, sem duplicar."
         actions={
           <Button variant="secondary" size="sm" onClick={() => setConfirmarEntrada(true)} loading={reprocessando}>
             <RefreshCw className="h-4 w-4" /> Reprocessar aba de entrada
@@ -551,35 +620,38 @@ export default function Importar() {
 
       <Card className="anim-fade-up p-5 sm:p-6">
         {fase === 'inicio' && (
-          <button
-            onClick={() => input.current?.click()}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => {
-              e.preventDefault();
-              void escolher(e.dataTransfer.files);
-            }}
-            className="group flex w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed border-line px-6 py-14 text-center transition-all duration-300 hover:border-brand/50 hover:bg-brand/[0.03]"
-          >
-            <div className="grid h-14 w-14 place-items-center rounded-full bg-brand/[0.08] text-brand transition-transform duration-300 group-hover:-translate-y-1 group-hover:scale-110">
-              <UploadCloud className="h-6 w-6" />
+          <div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <CaixaArquivo
+                titulo="NCs em execução"
+                descricao="Export do Obrasoft com as NCs “Em execução c/ Unigás”"
+                cor="warning"
+                indice={0}
+                arquivo={arqExec}
+                escolher={setArqExec}
+              />
+              <CaixaArquivo
+                titulo="NCs em verificação"
+                descricao="Export do Obrasoft com as NCs “Em verificação c/ Comgás”"
+                cor="info"
+                indice={1}
+                arquivo={arqVerif}
+                escolher={setArqVerif}
+              />
             </div>
-            <p className="mt-4 font-semibold">Clique ou arraste os arquivos .xlsx aqui</p>
-            <p className="mt-1 text-sm text-muted">
-              Pode enviar <b className="text-fg">os dois juntos</b> (execução + verificação) — assim o portal confere quais NCs abertas foram finalizadas. Nada é gravado antes da sua confirmação.
-            </p>
-          </button>
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+              <p className="max-w-xl text-[13px] text-muted">
+                Com as duas planilhas, o portal atualiza as NCs e confere quais abertas não vieram em nenhuma (finalizadas no Obrasoft). Nada é gravado antes da sua confirmação.
+              </p>
+              <motion.div animate={arqExec && arqVerif ? { scale: [1, 1.05, 1] } : { scale: 1 }} transition={{ duration: 0.4 }}>
+                <Button size="lg" variant="brand" disabled={!arqExec || !arqVerif} onClick={() => arqExec && arqVerif && void escolher([arqExec, arqVerif])}>
+                  <UploadCloud className="h-5 w-5" />
+                  {arqExec && arqVerif ? 'Analisar as duas planilhas' : `Anexe ${!arqExec && !arqVerif ? 'as duas planilhas' : 'a outra planilha'}`}
+                </Button>
+              </motion.div>
+            </div>
+          </div>
         )}
-        <input
-          ref={input}
-          type="file"
-          accept=".xlsx,.xls,.csv"
-          multiple
-          className="hidden"
-          onChange={(e) => {
-            void escolher(e.target.files);
-            e.target.value = '';
-          }}
-        />
 
         {(fase === 'lendo' || fase === 'importando') && (
           <div className="py-10 text-center">

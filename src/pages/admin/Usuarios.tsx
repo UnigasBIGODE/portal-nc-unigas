@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Copy, Eye, EyeOff, KeyRound, MailPlus, Pencil, Plus, ShieldCheck, Trash2, Wand2 } from 'lucide-react';
+import { Check, Copy, Eye, EyeOff, KeyRound, MailPlus, Pencil, Plus, Send, ShieldCheck, Trash2, Wand2, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
 import { api, mensagemErro } from '@/lib/api';
@@ -11,7 +11,7 @@ import { useTitulo } from '@/hooks/queries';
 import { useNavigate } from 'react-router-dom';
 import { MODO_DEMO } from '@/lib/api';
 import { rotaDoLink } from '@/demo/PainelDemo';
-import { Aviso, Badge, Button, Card, Dialog, ErrorState, Field, Input, PageHeader, Select, Skeleton } from '@/components/ui';
+import { Aviso, Badge, Button, Card, Dialog, ErrorState, Field, Input, PageHeader, Select, Skeleton, Textarea } from '@/components/ui';
 
 type Form = { id?: string; nome: string; email: string; tr: string; perfil: 'ADMIN' | 'RESPONSAVEL'; ativo: boolean; areas: string[]; enviarConvite: boolean };
 const NOVO: Form = { nome: '', email: '', tr: '', perfil: 'RESPONSAVEL', ativo: true, areas: [], enviarConvite: true };
@@ -32,6 +32,7 @@ export default function Usuarios() {
   const { usuario: eu } = useAuth();
   const [senhaDe, setSenhaDe] = useState<UsuarioAdmin | null>(null);
   const [removerU, setRemoverU] = useState<UsuarioAdmin | null>(null);
+  const [statusPara, setStatusPara] = useState<string[] | null>(null);
 
   async function salvar() {
     if (!form) return;
@@ -73,9 +74,14 @@ export default function Usuarios() {
         title="Usuários"
         subtitle="Cadastre responsáveis, vincule áreas e envie o convite para criarem a senha."
         actions={
-          <Button onClick={() => { setErro(null); setForm({ ...NOVO }); }}>
-            <Plus className="h-4 w-4" /> Novo usuário
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={() => setStatusPara([])}>
+              <Send className="h-4 w-4" /> Enviar status das NCs
+            </Button>
+            <Button onClick={() => { setErro(null); setForm({ ...NOVO }); }}>
+              <Plus className="h-4 w-4" /> Novo usuário
+            </Button>
+          </div>
         }
       />
       {msg && <Aviso className="mb-4">{msg}</Aviso>}
@@ -131,11 +137,21 @@ export default function Usuarios() {
                     <td className="whitespace-nowrap py-3 pl-2 pr-3 text-right">
                       {u.ativo && (
                         <Button variant="ghost" size="sm" loading={convidando === u.id} onClick={() => convidar(u)} title="Enviar link para criar/redefinir senha">
-                          <MailPlus className="h-4 w-4" /> {u.temSenha ? 'Redefinir' : 'Convidar'}
+                          <MailPlus className="h-4 w-4" /> <span className="hidden 2xl:inline">{u.temSenha ? 'Redefinir' : 'Convidar'}</span>
                         </Button>
                       )}
                       <Button variant="ghost" size="sm" onClick={() => { setErro(null); setForm({ id: u.id, nome: u.nome, email: u.email, tr: u.tr, perfil: u.perfil, ativo: u.ativo, areas: u.areas, enviarConvite: false }); }}>
-                        <Pencil className="h-4 w-4" /> <span className="hidden xl:inline">Editar</span>
+                        <Pencil className="h-4 w-4" /> <span className="hidden 2xl:inline">Editar</span>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setStatusPara([u.id])}
+                        title={u.ativo && u.email ? 'Enviar status das NCs por e-mail' : 'Usuário inativo'}
+                        aria-label={`Enviar status das NCs para ${u.nome}`}
+                        disabled={!u.ativo || (u.perfil !== 'ADMIN' && !u.areas.length)}
+                      >
+                        <Send className="h-4 w-4" />
                       </Button>
                       <Button variant="ghost" size="sm" onClick={() => setSenhaDe(u)} title="Alterar senha" aria-label={`Alterar senha de ${u.nome}`}>
                         <KeyRound className="h-4 w-4" />
@@ -233,6 +249,7 @@ export default function Usuarios() {
       )}
 
       <DefinirSenha u={senhaDe} fechar={() => setSenhaDe(null)} />
+      <EnviarStatus aberto={!!statusPara} usuarios={q.data?.itens ?? []} inicial={statusPara ?? []} fechar={() => setStatusPara(null)} />
       <RemoverUsuario
         u={removerU}
         fechar={() => setRemoverU(null)}
@@ -427,6 +444,135 @@ function RemoverUsuario({ u, fechar, removido }: { u: UsuarioAdmin | null; fecha
           {erro && <Aviso>{erro}</Aviso>}
         </div>
       )}
+    </Dialog>
+  );
+}
+
+type ResultadoEnvio = { id: string; nome: string; email?: string; status: 'enviado' | 'sem_email' | 'inativo' | 'cota' | 'falhou' | 'nao_encontrado'; abertas?: number };
+const ROTULO_ENVIO: Record<ResultadoEnvio['status'], { texto: string; tom: 'success' | 'warning' | 'danger' | 'neutral' }> = {
+  enviado: { texto: 'Enviado', tom: 'success' },
+  sem_email: { texto: 'Sem e-mail', tom: 'warning' },
+  inativo: { texto: 'Usuário inativo', tom: 'neutral' },
+  cota: { texto: 'Cota diária de e-mails esgotada', tom: 'danger' },
+  falhou: { texto: 'Falha no envio', tom: 'danger' },
+  nao_encontrado: { texto: 'Não encontrado', tom: 'neutral' },
+};
+
+/** Envia agora, por e-mail, a situação das NCs abertas para as pessoas escolhidas. */
+function EnviarStatus({ aberto, usuarios, inicial, fechar }: { aberto: boolean; usuarios: UsuarioAdmin[]; inicial: string[]; fechar: () => void }) {
+  const toast = useToast();
+  const elegiveis = usuarios.filter((u) => u.ativo && u.email && (u.perfil === 'ADMIN' || u.areas.length > 0));
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [busca, setBusca] = useState('');
+  const [mensagem, setMensagem] = useState('');
+  const [verif, setVerif] = useState(true);
+  const [enviando, setEnviando] = useState(false);
+  const [resultado, setResultado] = useState<ResultadoEnvio[] | null>(null);
+  const [chave, setChave] = useState('');
+  const k = aberto ? inicial.join(',') + '|' : '';
+  if (aberto && k !== chave) {
+    setChave(k);
+    setSel(new Set(inicial));
+    setBusca('');
+    setMensagem('');
+    setVerif(true);
+    setResultado(null);
+  }
+  if (!aberto && chave) setChave('');
+  const q = busca.trim().toLowerCase();
+  const visiveis = elegiveis.filter((u) => !q || u.nome.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || u.areas.some((a) => a.toLowerCase().includes(q)));
+  const alternar = (id: string) => setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const todosVisiveis = visiveis.length > 0 && visiveis.every((u) => sel.has(u.id));
+
+  async function enviar() {
+    setEnviando(true);
+    try {
+      const r = await api<{ resultado: ResultadoEnvio[]; enviados: number }>('usuarios.enviarStatus', { ids: [...sel], mensagem: mensagem.trim() || undefined, incluirVerificacao: verif });
+      setResultado(r.resultado);
+      toast({ tipo: r.enviados ? 'sucesso' : 'erro', titulo: r.enviados ? `${r.enviados} e-mail(s) enviado(s)` : 'Nenhum e-mail enviado' });
+    } catch (e) {
+      toast({ tipo: 'erro', titulo: 'Não foi possível enviar', descricao: mensagemErro(e) });
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <Dialog
+      open={aberto}
+      onClose={() => !enviando && fechar()}
+      size="md"
+      title={resultado ? 'Status enviado' : 'Enviar status das NCs'}
+      description={resultado ? undefined : 'Cada pessoa recebe agora um e-mail com as NCs abertas das áreas dela: atrasadas, em execução no prazo e, se quiser, as em verificação.'}
+      footer={
+        resultado ? (
+          <Button onClick={fechar}>Fechar</Button>
+        ) : (
+          <>
+            <Button variant="secondary" onClick={fechar} disabled={enviando}>
+              Cancelar
+            </Button>
+            <Button variant="brand" onClick={enviar} loading={enviando} disabled={!sel.size}>
+              <Send className="h-4 w-4" /> Enviar para {sel.size} pessoa(s)
+            </Button>
+          </>
+        )
+      }
+    >
+      <AnimatePresence mode="wait" initial={false}>
+        {resultado ? (
+          <motion.ul key="res" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="divide-y divide-line/60 rounded-xl border border-line">
+            {resultado.map((r, i) => (
+              <motion.li key={r.id} initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05, type: 'spring', stiffness: 400, damping: 30 }} className="flex flex-wrap items-center gap-2 px-4 py-3 text-sm">
+                <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.15 + i * 0.05, type: 'spring', stiffness: 500, damping: 18 }} className={cn('grid h-6 w-6 place-items-center rounded-full', r.status === 'enviado' ? 'bg-success/15 text-success' : 'bg-warning/15 text-warning')}>
+                  {r.status === 'enviado' ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
+                </motion.span>
+                <span className="font-medium">{r.nome || r.id}</span>
+                <span className="min-w-0 flex-1 truncate text-[12px] text-muted">{r.email}</span>
+                {r.abertas !== undefined && <span className="text-[12px] text-muted">{r.abertas} NC(s)</span>}
+                <Badge tom={ROTULO_ENVIO[r.status].tom}>{ROTULO_ENVIO[r.status].texto}</Badge>
+              </motion.li>
+            ))}
+          </motion.ul>
+        ) : (
+          <motion.div key="form" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
+            <div>
+              <div className="mb-2 flex items-center gap-2">
+                <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar por nome, e-mail ou área" className="flex-1" />
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setSel((s) => { const n = new Set(s); visiveis.forEach((u) => (todosVisiveis ? n.delete(u.id) : n.add(u.id))); return n; })}
+                >
+                  {todosVisiveis ? 'Desmarcar' : 'Marcar'} {q ? 'filtrados' : 'todos'}
+                </Button>
+              </div>
+              <ul className="max-h-[300px] divide-y divide-line/60 overflow-auto rounded-xl border border-line">
+                {visiveis.map((u) => (
+                  <li key={u.id}>
+                    <label className={cn('flex cursor-pointer items-center gap-3 px-4 py-2.5 text-sm transition-colors', sel.has(u.id) ? 'bg-brand/[0.04]' : 'hover:bg-elevated/60')}>
+                      <input type="checkbox" checked={sel.has(u.id)} onChange={() => alternar(u.id)} className="h-4 w-4 accent-[#E30613]" />
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-elevated text-[12px] font-semibold">{iniciais(u.nome)}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium">{u.nome}</span>
+                        <span className="block truncate text-[12px] text-muted">{u.perfil === 'ADMIN' ? 'Administrador · todas as áreas' : u.areas.join(', ')}</span>
+                      </span>
+                    </label>
+                  </li>
+                ))}
+                {!visiveis.length && <li className="px-4 py-6 text-center text-[13px] text-muted">Ninguém encontrado.</li>}
+              </ul>
+            </div>
+            <Field label="Recado (opcional)" hint="Aparece em destaque no começo do e-mail.">
+              <Textarea value={mensagem} onChange={(e) => setMensagem(e.target.value)} rows={2} maxLength={2000} placeholder="Ex.: Favor atualizar as evidências das NCs atrasadas até sexta-feira." />
+            </Field>
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <input type="checkbox" checked={verif} onChange={(e) => setVerif(e.target.checked)} className="h-4 w-4 accent-[#E30613]" />
+              Incluir as NCs em verificação c/ Comgás
+            </label>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </Dialog>
   );
 }

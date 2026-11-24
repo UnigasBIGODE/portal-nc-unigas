@@ -40,6 +40,8 @@ export interface Usuario {
   tr: string;
   perfil: Perfil;
   areas: string[];
+  /** Foto de perfil (data URL), quando houver. */
+  foto?: string;
 }
 
 export interface ConfigPublica {

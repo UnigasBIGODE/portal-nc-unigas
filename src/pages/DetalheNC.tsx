@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { useRef, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -1059,6 +1060,7 @@ export default function DetalheNC() {
 
   return (
     <div>
+      {createPortal(
       <AnimatePresence>
         {compacto && (
           <motion.div
@@ -1066,9 +1068,9 @@ export default function DetalheNC() {
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: -20, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-            className="fixed left-0 right-0 top-[72px] z-20 border-b border-line bg-card/85 backdrop-blur-xl lg:left-[var(--menu)]"
+            className="fixed left-3 right-3 top-[80px] z-20 sm:left-6 sm:right-6 lg:left-[calc(var(--menu)+1.5rem)] lg:right-6"
           >
-            <div className="mx-auto flex h-14 max-w-[1600px] items-center gap-3 px-4 sm:px-6 lg:px-10">
+            <div className="vg-trilho mx-auto flex h-14 max-w-[1600px] items-center gap-3 rounded-full px-4">
               <span className="tabular rounded-full bg-elevated px-2.5 py-0.5 text-[12px] font-semibold">NC {nc.nc_id}</span>
               <p className="min-w-0 flex-1 truncate text-[14px] font-semibold">{nc.titulo}</p>
               <div className="hidden items-center gap-2 md:flex">
@@ -1081,7 +1083,9 @@ export default function DetalheNC() {
             </div>
           </motion.div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+      document.body,
+      )}
       <Link to="/ncs" className="group mb-4 inline-flex items-center gap-1.5 text-[13px] text-muted hover:text-fg">
         <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" /> Voltar para a lista
       </Link>

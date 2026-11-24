@@ -30,7 +30,7 @@ type Size = 'sm' | 'md' | 'lg' | 'icon';
 
 const variantes: Record<Variant, string> = {
   primary: 'bg-primary text-primary-fg shadow-sm hover:shadow-md hover:opacity-90',
-  secondary: 'bg-card text-fg border border-line shadow-sm hover:bg-elevated hover:border-fg/15',
+  secondary: 'bg-[var(--vg-raised)] text-fg border border-[var(--vg-rim)] shadow-[inset_0_1px_0_var(--vg-gloss),0_2px_8px_rgb(var(--vg-sombra)/0.08)] hover:bg-card hover:border-fg/15',
   outline: 'border border-line text-fg hover:bg-elevated',
   ghost: 'text-muted hover:text-fg hover:bg-elevated',
   brand: 'bg-brand text-white shadow-sm shadow-brand/30 hover:bg-brand-hover hover:shadow-md hover:shadow-brand/30',
@@ -118,7 +118,7 @@ export function Card({ className, lift, tilt, onMouseMove, onMouseLeave, ...p }:
   };
   return (
     <div
-      className={cn('rounded-card border border-line bg-card shadow-card', (lift || tilt) && 'card-lift card-spot', tilt && 'card-tilt', className)}
+      className={cn('vg-painel', (lift || tilt) && 'card-lift card-spot', tilt && 'card-tilt', className)}
       onMouseMove={mover}
       onMouseLeave={sair}
       {...p}
@@ -165,7 +165,7 @@ export function Badge({ tom = 'neutral', className, children, ...p }: HTMLAttrib
 // ---------------------------------------------------------------- Campos
 
 const campoBase =
-  'w-full rounded-xl border border-line bg-card px-3 text-sm shadow-sm text-fg placeholder:text-muted/70 transition-colors focus:border-brand/60 focus:outline-none focus:ring-2 focus:ring-brand/30 disabled:opacity-60';
+  'w-full rounded-xl border border-[var(--vg-line)] bg-[var(--vg-raised)] px-3 text-sm shadow-[inset_0_1px_0_var(--vg-gloss)] text-fg placeholder:text-muted/70 transition-colors focus:border-brand/60 focus:outline-none focus:ring-2 focus:ring-brand/30 disabled:opacity-60';
 
 export function Field({ label, hint, erro, children, className }: { label?: ReactNode; hint?: ReactNode; erro?: string | null; children: ReactNode; className?: string }) {
   return (
@@ -556,7 +556,7 @@ export function Dialog({
             exit={{ opacity: 0, y: 16, scale: 0.98, transition: { duration: 0.15 } }}
             transition={{ type: 'spring', stiffness: 420, damping: 34 }}
             className={cn(
-              'relative flex max-h-[92vh] w-full flex-col rounded-t-card border border-line bg-card shadow-pop sm:rounded-card',
+              'vg-modal relative flex max-h-[92vh] w-full flex-col rounded-t-[24px] border border-line bg-card shadow-pop sm:rounded-[24px]',
               size === 'sm' ? 'sm:max-w-md' : size === 'lg' ? 'sm:max-w-3xl' : 'sm:max-w-xl',
             )}
           >
@@ -599,7 +599,7 @@ export function Pills<T extends string>({
   const grupo = useId();
   const [sobre, setSobre] = useState<T | null>(null);
   return (
-    <div role="tablist" aria-label={label} onMouseLeave={() => setSobre(null)} className={cn('flex gap-1 overflow-x-auto rounded-full border border-line bg-card p-1 shadow-sm', className)}>
+    <div role="tablist" aria-label={label} onMouseLeave={() => setSobre(null)} className={cn('vg-segmento flex gap-1 overflow-x-auto rounded-full p-1', className)}>
       {itens.map((i) => {
         const ativo = i.value === value;
         return (
@@ -693,9 +693,9 @@ export function PageHeader({ title, subtitle, actions, eyebrow }: { title: React
   return (
     <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
       <motion.div className="min-w-0" initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, ease: [0.2, 0.8, 0.2, 1] }}>
-        {eyebrow && <p className="mb-1.5 text-[12px] font-semibold uppercase tracking-[0.12em] text-brand">{eyebrow}</p>}
-        <h1 className="text-2xl font-bold tracking-tight sm:text-[30px]">{title}</h1>
-        {subtitle && <p className="mt-1.5 text-sm text-muted">{subtitle}</p>}
+        {eyebrow && <p className="mb-2 text-[12px] font-bold uppercase tracking-[0.16em] text-brand">{eyebrow}</p>}
+        <h1 className="vg-titulo">{title}</h1>
+        {subtitle && <p className="mt-2 text-[13px] font-medium text-[var(--vg-muted)]">{subtitle}</p>}
       </motion.div>
       {actions && (
         <motion.div className="flex flex-wrap items-center gap-2" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, delay: 0.1 }}>

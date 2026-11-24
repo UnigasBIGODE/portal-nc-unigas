@@ -1,3 +1,4 @@
+import { Avatar } from '@/components/Avatar';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Copy, Eye, EyeOff, KeyRound, MailPlus, Pencil, Plus, Send, ShieldCheck, Trash2, Wand2, X } from 'lucide-react';
@@ -132,7 +133,7 @@ export default function Usuarios() {
             {q.data.itens.map((u, i) => (
               <li key={u.id} className={cn('anim-fade-up p-4', !u.ativo && 'opacity-55')} style={{ ['--d' as string]: `${i * 40}ms` }}>
                 <div className="flex items-start gap-3">
-                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-elevated text-[12px] font-semibold">{iniciais(u.nome)}</div>
+                  <Avatar nome={u.nome} foto={u.foto} simples className="h-10 w-10 text-[12px]" />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <p className="font-medium">{u.nome}</p>
@@ -176,7 +177,7 @@ export default function Usuarios() {
                   <tr key={u.id} className={cn('border-b border-line/50 last:border-0', !u.ativo && 'opacity-55')}>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-elevated text-[12px] font-semibold">{iniciais(u.nome)}</div>
+                        <Avatar nome={u.nome} foto={u.foto} simples className="h-9 w-9 text-[12px]" />
                         <div className="min-w-0">
                           <p className="font-medium">{u.nome}</p>
                           <p className="text-[12px] text-muted">
@@ -591,7 +592,7 @@ function EnviarStatus({ aberto, usuarios, inicial, fechar }: { aberto: boolean; 
                   <li key={u.id}>
                     <label className={cn('flex cursor-pointer items-center gap-3 px-4 py-2.5 text-sm transition-colors', sel.has(u.id) ? 'bg-brand/[0.04]' : 'hover:bg-elevated/60')}>
                       <input type="checkbox" checked={sel.has(u.id)} onChange={() => alternar(u.id)} className="h-4 w-4 accent-[#E30613]" />
-                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-elevated text-[12px] font-semibold">{iniciais(u.nome)}</span>
+                      <Avatar nome={u.nome} foto={u.foto} simples className="h-8 w-8 text-[12px]" />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate font-medium">{u.nome}</span>
                         <span className="block truncate text-[12px] text-muted">{u.perfil === 'ADMIN' ? 'Administrador · todas as áreas' : u.areas.join(', ')}</span>

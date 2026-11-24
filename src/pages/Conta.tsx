@@ -1,16 +1,20 @@
-import { useState, type FormEvent } from 'react';
-import { Moon, ShieldCheck, Sun } from 'lucide-react';
+import { useRef, useState, type FormEvent } from 'react';
+import { Camera, Moon, ShieldCheck, Sun, Trash2 } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Avatar, prepararFotoPerfil } from '@/components/Avatar';
 import { api, mensagemErro } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useToast } from '@/components/Toast';
 import { useTitulo } from '@/hooks/queries';
 import { Aviso, Badge, Button, Card, CardHeader, Field, Input, PageHeader, Pills } from '@/components/ui';
-import { iniciais } from '@/lib/utils';
 
 export default function Conta() {
   useTitulo('Minha conta');
-  const { usuario, isAdmin, config } = useAuth();
+  const { usuario, isAdmin, config, atualizarSessao } = useAuth();
+  const arquivo = useRef<HTMLInputElement>(null);
+  const [enviandoFoto, setEnviandoFoto] = useState(false);
+  const [previa, setPrevia] = useState<string | null>(null);
   const { tema, setTema } = useTheme();
   const toast = useToast();
   const [atual, setAtual] = useState('');
@@ -38,13 +42,62 @@ export default function Conta() {
     }
   }
 
+  async function trocarFoto(file: File | undefined) {
+    if (!file) return;
+    setEnviandoFoto(true);
+    try {
+      const foto = await prepararFotoPerfil(file);
+      setPrevia(foto);
+      await api('contaFoto', { foto });
+      await atualizarSessao();
+      toast({ tipo: 'sucesso', titulo: 'Foto de perfil atualizada' });
+    } catch (err) {
+      toast({ tipo: 'erro', titulo: 'Não foi possível salvar a foto', descricao: err instanceof Error && !('code' in err) ? err.message : mensagemErro(err) });
+    } finally {
+      setPrevia(null);
+      setEnviandoFoto(false);
+      if (arquivo.current) arquivo.current.value = '';
+    }
+  }
+
+  async function removerFoto() {
+    setEnviandoFoto(true);
+    try {
+      await api('contaFoto', { foto: '' });
+      await atualizarSessao();
+      toast({ tipo: 'sucesso', titulo: 'Foto removida' });
+    } catch (err) {
+      toast({ tipo: 'erro', titulo: 'Não foi possível remover a foto', descricao: mensagemErro(err) });
+    } finally {
+      setEnviandoFoto(false);
+    }
+  }
+
   if (!usuario) return null;
+  const fotoAtual = previa ?? usuario.foto;
   return (
     <div className="max-w-3xl">
       <PageHeader eyebrow="Sua conta" title="Configurações da conta" />
       <div className="stagger space-y-4">
-        <Card className="flex flex-wrap items-center gap-4 p-5">
-          <div className="grid h-14 w-14 place-items-center rounded-full bg-brand text-lg font-semibold text-white">{iniciais(usuario.nome)}</div>
+        <Card className="flex flex-wrap items-center gap-5 p-5">
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => arquivo.current?.click()}
+              disabled={enviandoFoto}
+              className="group relative block rounded-full outline-none focus-visible:ring-2 focus-visible:ring-brand/50"
+              aria-label="Alterar foto de perfil"
+            >
+              <Avatar nome={usuario.nome} foto={fotoAtual} className="h-20 w-20 text-[22px]" />
+              <span className="absolute inset-0 grid place-items-center rounded-full bg-black/45 text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+                <Camera className="h-6 w-6" />
+              </span>
+              {enviandoFoto && (
+                <motion.span className="absolute -inset-1 rounded-full border-2 border-brand border-t-transparent" animate={{ rotate: 360 }} transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }} aria-hidden />
+              )}
+            </button>
+            <input ref={arquivo} type="file" accept="image/*" className="hidden" onChange={(e) => trocarFoto(e.target.files?.[0])} />
+          </div>
           <div className="min-w-0 flex-1">
             <p className="text-lg font-semibold">{usuario.nome}</p>
             <p className="text-sm text-muted">
@@ -60,11 +113,21 @@ export default function Conta() {
                 usuario.areas.map((a) => <Badge key={a}>{a}</Badge>)
               )}
             </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button size="sm" variant="secondary" onClick={() => arquivo.current?.click()} loading={enviandoFoto}>
+                <Camera className="h-3.5 w-3.5" /> {usuario.foto ? 'Trocar foto' : 'Adicionar foto'}
+              </Button>
+              {usuario.foto && (
+                <Button size="sm" variant="ghost" onClick={removerFoto} disabled={enviandoFoto}>
+                  <Trash2 className="h-3.5 w-3.5" /> Remover
+                </Button>
+              )}
+            </div>
           </div>
         </Card>
 
         <Card>
-          <CardHeader title="Aparência" description="O tema escuro é o padrão." />
+          <CardHeader title="Aparência" description="Escolha como o portal aparece para você. Também dá para trocar pela chave no topo." />
           <div className="p-5 pt-4">
             <Pills
               value={tema}

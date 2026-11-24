@@ -12,9 +12,10 @@ import { useTheme } from '@/context/ThemeContext';
 import { useAlertas } from '@/hooks/queries';
 import { totalPendencias, usePendencias } from '@/pages/admin/Pendencias';
 import { Logo } from '../Logo';
+import { Avatar } from '../Avatar';
 import { AlertaBadge } from '../StatusBadges';
 import { Badge, Button, Dialog, Skeleton } from '../ui';
-import { cn, iniciais } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { ADMIN, CONTA, MENU, trilha, type ItemNav } from './navegacao';
 import { CommandPalette } from './CommandPalette';
 
@@ -239,8 +240,8 @@ function Sidebar({ aberto, fechar, recolhido, alternarRecolhido }: { aberto: boo
 
         <div className={cn('vg-painel mx-4 mb-4 flex items-center gap-3 !rounded-2xl p-2.5 transition-all', r && 'mx-3 justify-center !border-transparent !bg-none !bg-transparent p-0 !shadow-none')}>
           <motion.div initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', stiffness: 360, damping: 15, delay: 0.15 }}>
-            <Link to="/conta" onClick={fechar} className="vg-avatar grid h-10 w-10 shrink-0 place-items-center text-[13px] font-semibold" title={usuario.nome} aria-label="Minha conta">
-              <span className="relative">{iniciais(usuario.nome)}</span>
+            <Link to="/conta" onClick={fechar} title={usuario.nome} aria-label="Minha conta" className="block rounded-full">
+              <Avatar nome={usuario.nome} foto={usuario.foto} className="h-10 w-10 text-[13px]" />
             </Link>
           </motion.div>
           {!r && (
@@ -435,7 +436,7 @@ function Topbar({ abrirMenu, abrirBusca }: { abrirMenu: () => void; abrirBusca: 
   const migalhas = trilha(loc.pathname);
   const mac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform);
   return (
-    <header className="sticky top-0 z-30 px-3 pt-3 sm:px-6 lg:px-10">
+    <header className="sticky top-0 z-30 px-3 pt-3 sm:px-5 lg:px-6">
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -495,8 +496,8 @@ function Topbar({ abrirMenu, abrirBusca }: { abrirMenu: () => void; abrirBusca: 
           />
           <Sino />
           <motion.span initial={{ scale: 0, rotate: -30 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: 'spring', stiffness: 380, damping: 16, delay: 0.25 }} className="hidden sm:block">
-            <Link to="/conta" className="vg-avatar grid h-10 w-10 place-items-center text-[13px] font-semibold" aria-label="Minha conta" title={usuario?.nome}>
-              <span className="relative">{usuario ? iniciais(usuario.nome) : ''}</span>
+            <Link to="/conta" aria-label="Minha conta" title={usuario?.nome} className="block rounded-full">
+              <Avatar nome={usuario?.nome ?? ''} foto={usuario?.foto} className="h-10 w-10 text-[13px]" />
             </Link>
           </motion.span>
         </div>
@@ -512,7 +513,7 @@ function SaidaEntrada({ chave, carregando }: { chave: string; carregando: ReactN
   // Animação só em CSS (fill-mode "backwards"): mesmo que seja interrompida, a página
   // termina sempre visível — nunca fica em branco.
   return (
-    <div key={chave} className="anim-pagina">
+    <div key={chave} className="anim-pagina vg-palco">
       <ProtecaoPagina chave={chave}>
         <Suspense fallback={carregando}>
           <Outlet />
@@ -609,6 +610,10 @@ export function AppLayout() {
       }
       return !v;
     });
+  // também no <html>, para elementos renderizados fora do layout (portais)
+  useEffect(() => {
+    document.documentElement.style.setProperty('--menu', `${recolhido ? LARGURA.recolhido : LARGURA.aberto}px`);
+  }, [recolhido]);
 
   return (
     <div className="min-h-screen" style={{ ['--menu' as string]: `${recolhido ? LARGURA.recolhido : LARGURA.aberto}px` }}>
@@ -619,7 +624,12 @@ export function AppLayout() {
       <Sidebar aberto={menu} fechar={() => setMenu(false)} recolhido={recolhido} alternarRecolhido={alternarRecolhido} />
       <div className="transition-[padding] duration-300 ease-out lg:pl-[var(--menu)]">
         <Topbar abrirMenu={() => setMenu(true)} abrirBusca={() => setBusca(true)} />
-        <main id="conteudo" className="mx-auto max-w-[1600px] px-4 pb-20 pt-7 sm:px-6 lg:px-10 lg:pt-9">
+        <div className="vg-cena" aria-hidden>
+          <i />
+          <i />
+          <i />
+        </div>
+        <main id="conteudo" className="relative z-[1] mx-auto max-w-[1600px] px-3 pb-20 pt-5 sm:px-5 lg:px-6 lg:pt-6">
           <SaidaEntrada
             chave={loc.pathname}
             carregando={<CarregandoPagina />}

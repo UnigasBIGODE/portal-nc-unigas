@@ -1,8 +1,6 @@
 import { useRef, useState, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
 import { gsap } from 'gsap';
 import { useGSAP } from '@gsap/react';
-import '@fontsource-variable/manrope';
 import { Link, useNavigate } from 'react-router-dom';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
@@ -163,15 +161,7 @@ export default function Dashboard() {
 
   return (
     <>
-      {createPortal(
-        <div className="vg-cena" aria-hidden>
-          <i />
-          <i />
-          <i />
-        </div>,
-        document.body,
-      )}
-      <div ref={palco} className="vg-palco">
+      <div ref={palco}>
       <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
           <p className="text-[12px] font-bold uppercase tracking-[0.16em] text-brand">

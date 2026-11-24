@@ -16,6 +16,7 @@ iniciarLiquidGlass();
 
 // Na demonstração (publicada dentro do claude.ai) a navegação fica em memória.
 const Router = MODO_DEMO ? MemoryRouter : HashRouter;
+import '@fontsource-variable/manrope';
 import './index.css';
 
 // Cada chamada ao Apps Script leva 1–3 s: cache agressivo no cliente.

@@ -43,7 +43,7 @@ export default function Auditoria() {
         ) : (
           <>
             <div className="overflow-x-auto">
-              <table className="w-full text-[13px]">
+              <table className="w-full min-w-[620px] text-[13px]">
                 <thead>
                   <tr className="border-b border-line text-[12px] text-muted">
                     <th className="px-5 py-3 text-left font-medium">Data</th>

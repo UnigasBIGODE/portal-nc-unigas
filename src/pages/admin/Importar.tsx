@@ -761,7 +761,7 @@ export default function Importar() {
           ) : !hist.data?.itens.length ? (
             <EmptyState title="Nenhuma importação ainda" />
           ) : (
-            <table className="w-full text-[13px]">
+            <table className="w-full min-w-[560px] text-[13px]">
               <thead>
                 <tr className="border-b border-line text-[12px] text-muted">
                   <th className="px-5 py-2.5 text-left font-medium">Data</th>

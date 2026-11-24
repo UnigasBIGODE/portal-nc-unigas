@@ -115,9 +115,9 @@ export function CommandPalette({ aberto, fechar }: { aberto: boolean; fechar: ()
                       onClick={() => escolher(o)}
                       role="option"
                       aria-selected={ativo}
-                      className={cn('relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left', ativo ? 'text-fg' : 'text-fg/80')}
+                      className={cn('lg-track relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left', ativo ? 'text-fg' : 'text-fg/80')}
                     >
-                      {ativo && <motion.span layoutId="palette-sel" className="absolute inset-0 rounded-xl bg-elevated" transition={{ type: 'spring', stiffness: 600, damping: 40 }} />}
+                      {ativo && <motion.span layoutId="palette-sel" className="lg-glass rounded-xl" transition={{ type: 'spring', stiffness: 420, damping: 28, mass: 0.7 }} />}
                       <span className={cn('relative grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-line bg-card', ativo && 'border-brand/30 text-brand')}>
                         <o.icone className="h-4 w-4" />
                       </span>

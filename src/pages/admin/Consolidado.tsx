@@ -75,7 +75,7 @@ export default function Consolidado() {
           <Card className="anim-fade-up mt-4 overflow-hidden" style={{ ['--d' as string]: '300ms' }}>
             <CardHeader title="Comparativo entre áreas" />
             <div className="mt-3 overflow-x-auto">
-              <table className="w-full text-[13px]">
+              <table className="w-full min-w-[560px] text-[13px]">
                 <thead>
                   <tr className="border-b border-line text-[12px] text-muted">
                     <th className="px-5 py-3 text-left font-medium">Área</th>

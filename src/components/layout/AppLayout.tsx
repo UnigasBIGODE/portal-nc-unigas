@@ -1,4 +1,4 @@
-import { Component, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Component, Suspense, createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, NavLink, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { useIsFetching } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -28,17 +28,41 @@ function lerRecolhido() {
 
 // ---------------------------------------------------------------- item do menu
 
+/** Vidro compartilhado do menu: uma "gota" que desliza até o item sob o mouse. */
+const HoverMenu = createContext<{ hover: string | null; setHover: (v: string | null) => void }>({ hover: null, setHover: () => {} });
+
+/** Vidro deslizante reutilizado pelos itens do menu que não são links (Suporte, Sair…). */
+function VidroMenu({ id }: { id: string }) {
+  const { hover } = useContext(HoverMenu);
+  return (
+    <AnimatePresence>
+      {hover === id && (
+        <motion.span
+          layoutId="lg-menu"
+          className="lg-glass rounded-xl"
+          initial={{ opacity: 0, scale: 0.92 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.96 }}
+          transition={{ type: 'spring', stiffness: 420, damping: 26, mass: 0.7 }}
+        />
+      )}
+    </AnimatePresence>
+  );
+}
+
 function ItemMenu({ item, recolhido, badge, indice }: { item: ItemNav; recolhido: boolean; badge?: number; indice: number }) {
   const Icon = item.icon;
+  const { hover, setHover } = useContext(HoverMenu);
   return (
     <NavLink
       to={item.to}
+      onMouseEnter={() => setHover(item.to)}
       end={item.end}
       title={recolhido ? item.label : undefined}
       style={{ ['--d' as string]: `${40 + indice * 30}ms` }}
       className={({ isActive }) =>
         cn(
-          'anim-slide-right group relative flex h-10 items-center gap-3 rounded-xl px-3 text-[14px] font-medium outline-none transition-colors duration-200',
+          'anim-slide-right lg-track group relative flex h-10 items-center gap-3 rounded-xl px-3 text-[14px] font-medium outline-none transition-colors duration-200',
           isActive ? 'text-brand' : 'text-muted hover:text-fg',
           recolhido && 'justify-center px-0',
         )
@@ -55,8 +79,19 @@ function ItemMenu({ item, recolhido, badge, indice }: { item: ItemNav; recolhido
               <span className="absolute -left-4 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-brand" />
             </motion.span>
           )}
-          {!isActive && <span className="absolute inset-0 rounded-xl bg-elevated opacity-0 transition-opacity duration-200 group-hover:opacity-100" />}
-          <Icon className="relative h-[18px] w-[18px] shrink-0 transition-transform duration-200 group-hover:scale-110" aria-hidden />
+          <AnimatePresence>
+            {hover === item.to && (
+              <motion.span
+                layoutId="lg-menu"
+                className="lg-glass rounded-xl"
+                initial={{ opacity: 0, scale: 0.92 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.96 }}
+                transition={{ type: 'spring', stiffness: 420, damping: 26, mass: 0.7 }}
+              />
+            )}
+          </AnimatePresence>
+          <Icon className="relative h-[18px] w-[18px] shrink-0 transition-transform duration-300 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] group-hover:scale-[1.18]" aria-hidden />
           <AnimatePresence initial={false}>
             {!recolhido && (
               <motion.span className="relative flex-1 truncate" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
@@ -86,6 +121,7 @@ function ItemMenu({ item, recolhido, badge, indice }: { item: ItemNav; recolhido
 
 function BotaoInstalar({ recolhido }: { recolhido: boolean }) {
   const { podeInstalar, precisaInstrucoesIOS, instalar } = useInstalarApp();
+  const { setHover } = useContext(HoverMenu);
   const toast = useToast();
   const [ios, setIos] = useState(false);
   if (!podeInstalar && !precisaInstrucoesIOS) return null;
@@ -95,6 +131,7 @@ function BotaoInstalar({ recolhido }: { recolhido: boolean }) {
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         whileTap={{ scale: 0.97 }}
+        onMouseEnter={() => setHover('instalar')}
         onClick={async (e) => {
           e.stopPropagation();
           if (podeInstalar) {
@@ -102,9 +139,10 @@ function BotaoInstalar({ recolhido }: { recolhido: boolean }) {
           } else setIos(true);
         }}
         title={recolhido ? 'Instalar app' : undefined}
-        className={cn('relative flex h-10 w-full items-center gap-3 overflow-hidden rounded-xl bg-brand/[0.07] px-3 text-[14px] font-semibold text-brand transition-colors hover:bg-brand/[0.12]', recolhido && 'justify-center px-0')}
+        className={cn('lg-track relative flex h-10 w-full items-center gap-3 overflow-hidden rounded-xl bg-brand/[0.07] px-3 text-[14px] font-semibold text-brand transition-colors hover:bg-brand/[0.12]', recolhido && 'justify-center px-0')}
       >
         <motion.span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent" initial={{ x: '-100%' }} animate={{ x: '100%' }} transition={{ duration: 1.8, repeat: Infinity, repeatDelay: 4 }} aria-hidden />
+        <VidroMenu id="instalar" />
         <Smartphone className="relative h-[18px] w-[18px]" aria-hidden /> {!recolhido && <span className="relative">Instalar app</span>}
       </motion.button>
       <Dialog open={ios} onClose={() => setIos(false)} size="sm" title="Instalar no iPhone / iPad" footer={<Button onClick={() => setIos(false)}>Entendi</Button>}>
@@ -132,18 +170,20 @@ function Sidebar({ aberto, fechar, recolhido, alternarRecolhido }: { aberto: boo
     mq.addEventListener('change', f);
     return () => mq.removeEventListener('change', f);
   }, []);
+  const [hoverMenu, setHoverMenu] = useState<string | null>(null);
   if (!usuario) return null;
   const r = desktop && recolhido;
   const areasTxt = usuario.areas.join(' · ');
 
   return (
-    <>
+    <HoverMenu.Provider value={{ hover: hoverMenu, setHover: setHoverMenu }}>
       <AnimatePresence>
         {aberto && !desktop && (
           <motion.div className="fixed inset-0 z-40 bg-[#0B0B0D]/40 backdrop-blur-[3px]" onClick={fechar} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
         )}
       </AnimatePresence>
       <motion.aside
+        onMouseLeave={() => setHoverMenu(null)}
         aria-label="Menu principal"
         className="fixed inset-y-0 left-0 z-50 flex flex-col border-r border-line bg-card"
         initial={false}
@@ -218,9 +258,12 @@ function Sidebar({ aberto, fechar, recolhido, alternarRecolhido }: { aberto: boo
           <a
             href={config?.emailSuporte ? `mailto:${config.emailSuporte}?subject=Portal%20de%20NCs` : '#'}
             title={r ? `Suporte${config?.emailSuporte ? ': ' + config.emailSuporte : ''}` : undefined}
-            className={cn('flex h-10 items-center gap-3 rounded-xl px-3 text-[14px] font-medium text-muted transition-colors hover:bg-elevated hover:text-fg', r && 'justify-center px-0')}
+            onMouseEnter={() => setHoverMenu('suporte')}
+            className={cn('lg-track group relative flex h-10 items-center gap-3 rounded-xl px-3 text-[14px] font-medium text-muted transition-colors hover:text-fg', r && 'justify-center px-0')}
           >
-            <LifeBuoy className="h-[18px] w-[18px]" aria-hidden /> {!r && 'Suporte'}
+            <VidroMenu id="suporte" />
+            <LifeBuoy className="relative h-[18px] w-[18px] transition-transform duration-300 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] group-hover:scale-[1.18] group-hover:rotate-45" aria-hidden />
+            {!r && <span className="relative">Suporte</span>}
           </a>
           <button
             onClick={async () => {
@@ -228,9 +271,12 @@ function Sidebar({ aberto, fechar, recolhido, alternarRecolhido }: { aberto: boo
               navigate('/login');
             }}
             title={r ? 'Sair' : undefined}
-            className={cn('flex h-10 w-full items-center gap-3 rounded-xl px-3 text-[14px] font-medium text-muted transition-colors hover:bg-danger/[0.07] hover:text-danger', r && 'justify-center px-0')}
+            onMouseEnter={() => setHoverMenu('sair')}
+            className={cn('lg-track group relative flex h-10 w-full items-center gap-3 rounded-xl px-3 text-[14px] font-medium text-muted transition-colors hover:text-danger', r && 'justify-center px-0')}
           >
-            <LogOut className="h-[18px] w-[18px]" aria-hidden /> {!r && 'Sair'}
+            <VidroMenu id="sair" />
+            <LogOut className="relative h-[18px] w-[18px] transition-transform duration-300 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] group-hover:translate-x-0.5 group-hover:scale-[1.18]" aria-hidden />
+            {!r && <span className="relative">Sair</span>}
           </button>
         </div>
 
@@ -246,7 +292,7 @@ function Sidebar({ aberto, fechar, recolhido, alternarRecolhido }: { aberto: boo
           </button>
         )}
       </motion.aside>
-    </>
+    </HoverMenu.Provider>
   );
 }
 
@@ -255,6 +301,7 @@ function Sidebar({ aberto, fechar, recolhido, alternarRecolhido }: { aberto: boo
 function Sino() {
   const { data, isLoading } = useAlertas();
   const [aberto, setAberto] = useState(false);
+  const [sobre, setSobre] = useState<number | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const loc = useLocation();
   useEffect(() => {
@@ -306,8 +353,13 @@ function Sino() {
               )}
               {data && data.itens.length === 0 && <p className="px-4 py-10 text-center text-sm text-muted">Nenhum alerta no momento 🎉</p>}
               {data?.itens.slice(0, 8).map((a, i) => (
-                <motion.div key={i} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.035 }}>
-                  <Link to={`/ncs/${a.nc_id}`} className="group flex gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-elevated">
+                <motion.div key={i} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.035 }} onMouseEnter={() => setSobre(i)} onMouseLeave={() => setSobre(null)}>
+                  <Link to={`/ncs/${a.nc_id}`} className="lg-track group relative flex gap-3 rounded-xl px-3 py-2.5 [&>*]:relative">
+                    <AnimatePresence>
+                      {sobre === i && (
+                        <motion.span layoutId="lg-sino" className="lg-glass !absolute rounded-xl" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ type: 'spring', stiffness: 420, damping: 28 }} />
+                      )}
+                    </AnimatePresence>
                     <span className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', a.nivel === 'critico' ? 'bg-danger' : a.nivel === 'atencao' ? 'bg-warning' : 'bg-info')} />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[13px] font-medium">
@@ -362,25 +414,34 @@ function Topbar({ abrirMenu, abrirBusca }: { abrirMenu: () => void; abrirBusca: 
         <Button variant="secondary" size="icon" className="lg:hidden" onClick={abrirMenu} aria-label="Abrir menu">
           <Menu className="h-[18px] w-[18px]" />
         </Button>
-        <nav aria-label="Trilha" className="hidden min-w-0 items-center gap-1.5 text-[13px] md:flex">
-          <span className="text-muted">Portal NC</span>
-          {migalhas.map((m, i) => (
-            <motion.span key={loc.pathname + i} className="flex min-w-0 items-center gap-1.5" initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.06 }}>
-              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted/60" />
-              {m.to ? (
-                <Link to={m.to} className="truncate text-muted hover:text-fg">
-                  {m.label}
-                </Link>
-              ) : (
-                <span className={cn('truncate', i === migalhas.length - 1 ? 'font-semibold text-fg' : 'text-muted')}>{m.label}</span>
-              )}
-            </motion.span>
-          ))}
+        <nav aria-label="Trilha" className="flex min-w-0 items-center gap-1.5 text-[13px]">
+          <span className="hidden text-muted xl:inline">Portal NC</span>
+          {migalhas.map((m, i) => {
+            const ultimo = i === migalhas.length - 1;
+            return (
+              <motion.span
+                key={loc.pathname + i}
+                className={cn('min-w-0 items-center gap-1.5', ultimo ? 'flex' : 'hidden xl:flex')}
+                initial={{ opacity: 0, x: -6 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: i * 0.06 }}
+              >
+                <ChevronRight className="hidden h-3.5 w-3.5 shrink-0 text-muted/60 xl:block" />
+                {m.to && !ultimo ? (
+                  <Link to={m.to} className="truncate text-muted hover:text-fg">
+                    {m.label}
+                  </Link>
+                ) : (
+                  <span className={cn('truncate', ultimo ? 'text-[15px] font-semibold text-fg xl:text-[13px]' : 'text-muted')}>{m.label}</span>
+                )}
+              </motion.span>
+            );
+          })}
         </nav>
         <div className="ml-auto flex items-center gap-2">
           <button
             onClick={abrirBusca}
-            className="group flex h-10 items-center gap-2.5 rounded-full border border-line bg-card pl-3.5 pr-2 text-[13px] text-muted shadow-sm transition-all duration-300 hover:border-fg/15 hover:shadow-md sm:w-72"
+            className="lg-hover lg-track group flex h-10 items-center gap-2.5 rounded-full border border-line bg-card pl-3.5 pr-2 text-[13px] text-muted shadow-sm hover:border-fg/15 hover:shadow-md sm:w-72"
             aria-label="Busca rápida"
           >
             <Search className="h-4 w-4 transition-transform group-hover:scale-110" />
@@ -397,7 +458,7 @@ function Topbar({ abrirMenu, abrirBusca }: { abrirMenu: () => void; abrirBusca: 
           <Sino />
           <Link
             to="/conta"
-            className="hidden h-10 w-10 place-items-center rounded-full bg-gradient-to-br from-brand to-[#9b0410] text-[13px] font-semibold text-white shadow-md shadow-brand/30 transition-transform hover:scale-105 sm:grid"
+            className="lg-hover lg-track hidden h-10 w-10 place-items-center rounded-full bg-gradient-to-br from-brand to-[#9b0410] text-[13px] font-semibold text-white shadow-md shadow-brand/30 sm:grid"
             aria-label="Minha conta"
           >
             {usuario ? iniciais(usuario.nome) : ''}

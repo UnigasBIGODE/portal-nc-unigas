@@ -70,7 +70,7 @@ export default function Areas() {
           <div className="space-y-2 p-5">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-12" />)}</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-[13px]">
+            <table className="w-full min-w-[600px] text-[13px]">
               <thead>
                 <tr className="border-b border-line text-[12px] text-muted">
                   <th className="px-5 py-3 text-left font-medium">Área</th>

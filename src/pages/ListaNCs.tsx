@@ -124,7 +124,7 @@ export default function ListaNCs() {
         <FiltrosBar
           valor={filtros}
           onChange={(f) => atualizar({ area: f.area, gerencia: f.gerencia, etapa: f.etapa, criticidade: f.criticidade, regiao: f.regiao, status: f.status, verificador: f.verificador })}
-          campos={['area', 'gerencia', 'etapa', 'criticidade', 'regiao', 'status', 'verificador']}
+          campos={['area', 'gerencia', 'etapa', 'criticidade', 'regiao', 'status']}
         />
       </div>
 

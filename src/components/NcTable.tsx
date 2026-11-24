@@ -12,14 +12,13 @@ const col = createColumnHelper<NC>();
 
 /** Colunas secundárias somem em telas menores (prioridade de informação). */
 const RESPONSIVO: Record<string, string> = {
-  verificador: 'hidden 2xl:table-cell',
   gerencia: 'hidden 2xl:table-cell',
   data_execucao: 'hidden xl:table-cell',
   data_cadastro: 'hidden lg:table-cell',
 };
 
 export const COLUNAS_PADRAO = [
-  'nc_id', 'area', 'titulo', 'criticidade', 'verificador', 'gerencia', 'data_cadastro', 'prazo', 'data_execucao', 'etapa', 'status_prazo', 'dias_atraso',
+  'nc_id', 'area', 'titulo', 'criticidade', 'gerencia', 'data_cadastro', 'prazo', 'data_execucao', 'etapa', 'status_prazo', 'dias_atraso',
 ] as const;
 
 function todasColunas(selecao?: (nc: NC) => ReactNode) {
@@ -37,7 +36,6 @@ function todasColunas(selecao?: (nc: NC) => ReactNode) {
       ),
     }),
     col.accessor('criticidade', { header: 'Crit.', cell: (c) => <CriticidadeBadge valor={c.getValue()} compacto /> }),
-    col.accessor('verificador', { header: 'Verificador', cell: (c) => <span className="whitespace-nowrap text-muted">{c.getValue() || '—'}</span> }),
     col.accessor('gerencia', { header: 'Gerência', cell: (c) => <span className="whitespace-nowrap text-muted">{c.getValue() || '—'}</span> }),
     col.accessor('data_cadastro', { header: 'Cadastro', cell: (c) => <span className="tabular whitespace-nowrap">{fmtData(c.getValue())}</span> }),
     col.accessor('prazo', { header: 'Prazo', cell: (c) => <span className="tabular whitespace-nowrap">{fmtData(c.getValue())}</span> }),
@@ -104,7 +102,7 @@ export function NcTable({
   return (
     <>
       {/* Desktop/tablet: tabela */}
-      <div className={cn('hidden overflow-x-auto md:block', carregando && 'opacity-60 transition-opacity')}>
+      <div className={cn('hidden overflow-x-auto xl:block', carregando && 'opacity-60 transition-opacity')}>
         <table className="w-full text-[13px]">
           <thead>
             {table.getHeaderGroups().map((hg) => (
@@ -160,7 +158,7 @@ export function NcTable({
       </div>
 
       {/* Celular: cards */}
-      <ul className={cn('divide-y divide-line/60 md:hidden', carregando && 'opacity-60')}>
+      <ul className={cn('divide-y divide-line/60 xl:hidden', carregando && 'opacity-60')}>
         {itens.map((n, i) => (
           <li key={n.nc_id} className="anim-fade-up flex gap-3 px-4 py-4" style={{ ['--d' as string]: `${Math.min(i, 10) * 45}ms` }}>
             {selecao && <div className="pt-1">{selecao(n)}</div>}

@@ -21,8 +21,8 @@ function Mini({ rotulo, valor, tom }: { rotulo: string; valor: number | string; 
 export function CardArea({ a, meta, onClick, indice = 0 }: { a: ResumoArea; meta: number; onClick: () => void; indice?: number }) {
   const atingiu = a.pctNoPrazo !== null && a.pctNoPrazo >= meta;
   return (
-    <Card tilt className="anim-fade-up group flex flex-col" style={{ ['--d' as string]: `${indice * 70}ms` }}>
-      <button onClick={onClick} className="flex h-full flex-col p-5 text-left" aria-label={`Abrir NCs da área ${a.area}`}>
+    <Card tilt className="anim-fade-up group flex min-w-0 flex-col" style={{ ['--d' as string]: `${indice * 70}ms` }}>
+      <button onClick={onClick} className="flex h-full min-w-0 flex-col p-4 text-left sm:p-5" aria-label={`Abrir NCs da área ${a.area}`}>
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <h3 className={cn('truncate text-[16px] font-semibold', a.area === 'A classificar' && 'text-warning')}>{a.area}</h3>
@@ -89,7 +89,7 @@ export default function PorArea() {
           <ErrorState mensagem={mensagemErro(q.error)} onRetry={() => q.refetch()} />
         </Card>
       ) : !q.data ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-72" />
           ))}
@@ -99,7 +99,7 @@ export default function PorArea() {
           <EmptyState title="Nenhuma área vinculada" description="Peça ao administrador para vincular suas áreas." />
         </Card>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {q.data.areas.map((a, i) => (
             <CardArea key={a.area} indice={i} a={a} meta={q.data.metaPct} onClick={() => navigate(`/ncs?area=${encodeURIComponent(a.area)}`)} />
           ))}

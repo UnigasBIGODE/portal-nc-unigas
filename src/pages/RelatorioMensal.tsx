@@ -98,7 +98,7 @@ export default function RelatorioMensal() {
           </div>
         ) : (
           <div className="mt-3 overflow-x-auto">
-            <table className={cn('w-full text-[14px]', q.isFetching && 'opacity-60')}>
+            <table className={cn('w-full min-w-[620px] text-[13px] sm:text-[14px]', q.isFetching && 'opacity-60')}>
               <thead>
                 <tr className="border-b border-line bg-elevated/60 text-[11px] uppercase tracking-[0.06em] text-muted">
                   <th scope="col" className="px-5 py-3 text-left font-medium">Mês</th>

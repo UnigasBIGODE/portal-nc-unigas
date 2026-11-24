@@ -3,19 +3,24 @@
  * Select, Textarea, Skeleton, Dialog, estados vazio/erro), sem dependências extras.
  */
 import {
+  Children,
   forwardRef,
+  isValidElement,
   useEffect,
+  useRef,
   useId,
+  useState,
   type ButtonHTMLAttributes,
   type HTMLAttributes,
   type InputHTMLAttributes,
+  type KeyboardEvent as KeyboardEventReact,
   type ReactNode,
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { AlertTriangle, Loader2, RotateCw, X } from 'lucide-react';
+import { AlertTriangle, Check, ChevronDown, Loader2, RotateCw, Search, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // ---------------------------------------------------------------- Button
@@ -73,13 +78,14 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
         onPointerDown?.(e);
       }}
       className={cn(
-        'relative inline-flex shrink-0 items-center justify-center rounded-full font-medium transition-all duration-200 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50',
+        'lg-host lg-track relative inline-flex shrink-0 items-center justify-center rounded-full font-medium duration-300 disabled:pointer-events-none disabled:opacity-50',
         variantes[variant],
         tamanhos[size],
         className,
       )}
       {...props}
     >
+      <span className="lg-btn" data-v={variant === 'primary' || variant === 'brand' ? 'solido' : 'vidro'} aria-hidden />
       <span className="ripple-host" aria-hidden />
       {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
       {children}
@@ -180,21 +186,275 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<H
   return <textarea ref={ref} className={cn(campoBase, 'min-h-[96px] resize-none py-2.5 leading-relaxed', className)} {...p} />;
 });
 
-const SETA_SELECT =
-  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238E8E96' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\")";
+type OpcaoSel = { value: string; label: ReactNode; texto: string; disabled?: boolean };
 
-export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement>>(function Select({ className, children, style, ...p }, ref) {
+function textoDe(n: ReactNode): string {
+  if (n === null || n === undefined || typeof n === 'boolean') return '';
+  if (typeof n === 'string' || typeof n === 'number') return String(n);
+  if (Array.isArray(n)) return n.map(textoDe).join('');
+  if (isValidElement(n)) return textoDe((n.props as { children?: ReactNode }).children);
+  return '';
+}
+
+function lerOpcoes(children: ReactNode): OpcaoSel[] {
+  const out: OpcaoSel[] = [];
+  Children.forEach(children, (c) => {
+    if (!isValidElement(c)) return;
+    const pr = c.props as { value?: string | number; children?: ReactNode; disabled?: boolean };
+    if (c.type === 'option') {
+      const texto = textoDe(pr.children);
+      out.push({ value: pr.value !== undefined ? String(pr.value) : texto, label: pr.children, texto, disabled: pr.disabled });
+    } else if (pr.children) out.push(...lerOpcoes(pr.children));
+  });
+  return out;
+}
+
+const semAcento = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+type SelectProps = Omit<SelectHTMLAttributes<HTMLSelectElement>, 'onChange'> & {
+  onChange?: (e: { target: { value: string; name?: string }; currentTarget: { value: string; name?: string } }) => void;
+  /** Destaca o campo (ex.: filtro com valor escolhido). */
+  ativo?: boolean;
+  /** Ícone à esquerda do texto. */
+  icone?: ReactNode;
+};
+
+/**
+ * Lista de opções com o visual do portal (substitui o <select> nativo, que usa o menu do sistema):
+ * popover animado com vidro, marcação da opção escolhida, busca em listas longas e teclado.
+ * Mantém a mesma API do <select>: <option> como filhos e onChange(e) com e.target.value.
+ */
+export function Select({ className, children, style, value, defaultValue, onChange, disabled, ativo, icone, name, id, ...resto }: SelectProps) {
+  const opcoes = lerOpcoes(children);
+  const [interno, setInterno] = useState(String(defaultValue ?? opcoes[0]?.value ?? ''));
+  const atual = value !== undefined && value !== null ? String(value) : interno;
+  const sel = opcoes.find((o) => o.value === atual) ?? opcoes[0];
+  const [aberto, setAberto] = useState(false);
+  const [busca, setBusca] = useState('');
+  const [foco, setFoco] = useState(0);
+  const [pos, setPos] = useState<{ left: number; top: number; width: number; acima: boolean; maxH: number } | null>(null);
+  const botao = useRef<HTMLButtonElement>(null);
+  const lista = useRef<HTMLDivElement>(null);
+  const campoBusca = useRef<HTMLInputElement>(null);
+  const listaId = useId();
+  const comBusca = opcoes.length > 8;
+  const q = semAcento(busca.trim());
+  const visiveis = q ? opcoes.filter((o) => semAcento(o.texto).includes(q)) : opcoes;
+  const tecla = useRef({ texto: '', t: 0 });
+  const ariaLabel = (resto as { 'aria-label'?: string })['aria-label'];
+
+  const posicionar = () => {
+    const b = botao.current?.getBoundingClientRect();
+    if (!b) return;
+    const largura = Math.min(Math.max(b.width, 240), window.innerWidth - 16);
+    const left = Math.min(Math.max(8, b.left), window.innerWidth - largura - 8);
+    const abaixo = window.innerHeight - b.bottom - 12;
+    const acima = abaixo < 260 && b.top > abaixo;
+    const maxH = Math.min(360, (acima ? b.top : abaixo) - 12);
+    setPos({ left, top: acima ? b.top - 6 : b.bottom + 6, width: largura, acima, maxH });
+  };
+
+  function abrir() {
+    if (disabled) return;
+    posicionar();
+    setBusca('');
+    setFoco(Math.max(0, opcoes.findIndex((o) => o.value === atual)));
+    setAberto(true);
+  }
+  function fechar(devolverFoco = true) {
+    setAberto(false);
+    if (devolverFoco) botao.current?.focus();
+  }
+  function escolher(o: OpcaoSel) {
+    if (o.disabled) return;
+    if (value === undefined) setInterno(o.value);
+    const alvo = { value: o.value, name };
+    if (o.value !== atual) onChange?.({ target: alvo, currentTarget: alvo });
+    fechar();
+  }
+
+  useEffect(() => {
+    if (!aberto) return;
+    const fora = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (!botao.current?.contains(t) && !lista.current?.contains(t)) fechar(false);
+    };
+    const mover = () => posicionar();
+    document.addEventListener('mousedown', fora);
+    window.addEventListener('resize', mover);
+    window.addEventListener('scroll', mover, true);
+    if (comBusca) setTimeout(() => campoBusca.current?.focus(), 30);
+    else setTimeout(() => lista.current?.focus(), 30);
+    return () => {
+      document.removeEventListener('mousedown', fora);
+      window.removeEventListener('resize', mover);
+      window.removeEventListener('scroll', mover, true);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aberto]);
+
+  useEffect(() => {
+    if (!aberto) return;
+    lista.current?.querySelector<HTMLElement>(`[data-i="${foco}"]`)?.scrollIntoView({ block: 'nearest' });
+  }, [foco, aberto]);
+
+  function teclado(e: KeyboardEventReact<HTMLElement>) {
+    if (!aberto) {
+      if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(e.key)) {
+        e.preventDefault();
+        abrir();
+      }
+      return;
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      e.nativeEvent.stopImmediatePropagation();
+      fechar();
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setFoco((f) => Math.min(visiveis.length - 1, f + 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setFoco((f) => Math.max(0, f - 1));
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      setFoco(0);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      setFoco(visiveis.length - 1);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const o = visiveis[foco];
+      if (o) escolher(o);
+    } else if (e.key === 'Tab') {
+      fechar(false);
+    } else if (!comBusca && e.key.length === 1) {
+      const agora = Date.now();
+      tecla.current.texto = (agora - tecla.current.t < 600 ? tecla.current.texto : '') + semAcento(e.key);
+      tecla.current.t = agora;
+      const i = visiveis.findIndex((o) => semAcento(o.texto).startsWith(tecla.current.texto));
+      if (i >= 0) setFoco(i);
+    }
+  }
+
+  const vazio = !sel || sel.value === '';
   return (
-    <select
-      ref={ref}
-      className={cn(campoBase, 'h-10 cursor-pointer appearance-none pr-8', className)}
-      style={{ backgroundImage: SETA_SELECT, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center', backgroundSize: '16px', ...style }}
-      {...p}
-    >
-      {children}
-    </select>
+    <>
+      <button
+        ref={botao}
+        type="button"
+        id={id}
+        role="combobox"
+        aria-haspopup="listbox"
+        aria-expanded={aberto}
+        aria-controls={aberto ? listaId : undefined}
+        aria-label={ariaLabel}
+        disabled={disabled}
+        onClick={() => (aberto ? fechar() : abrir())}
+        onKeyDown={teclado}
+        style={style}
+        className={cn(
+          campoBase,
+          'lg-track group relative flex h-10 items-center gap-2 pr-9 text-left transition-[border-color,box-shadow,background-color] duration-200',
+          'hover:border-fg/20 hover:shadow-sm',
+          aberto && 'border-brand/50 ring-4 ring-brand/10',
+          ativo && !aberto && 'border-brand/35 bg-brand/[0.06] text-fg',
+          disabled && 'cursor-not-allowed opacity-50',
+          className,
+        )}
+      >
+        {icone && <span className={cn('shrink-0 text-muted transition-colors', (ativo || aberto) && 'text-brand')}>{icone}</span>}
+        <span className={cn('min-w-0 flex-1 truncate', vazio && !ativo && 'text-fg/80', ativo && 'font-medium')}>{sel ? sel.label : ''}</span>
+        <motion.span
+          className={cn('pointer-events-none absolute right-3 top-1/2 -mt-2 text-muted', (ativo || aberto) && 'text-brand')}
+          animate={{ rotate: aberto ? 180 : 0 }}
+          transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+        >
+          <ChevronDown className="h-4 w-4" />
+        </motion.span>
+      </button>
+      {name && <input type="hidden" name={name} value={atual} />}
+      {typeof document !== 'undefined' &&
+        createPortal(
+          <AnimatePresence>
+            {aberto && pos && (
+              <motion.div
+                ref={lista}
+                id={listaId}
+                role="listbox"
+                tabIndex={-1}
+                aria-label={ariaLabel}
+                onKeyDown={teclado}
+                initial={{ opacity: 0, y: pos.acima ? 8 : -8, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: pos.acima ? 6 : -6, scale: 0.97, transition: { duration: 0.12 } }}
+                transition={{ type: 'spring', stiffness: 520, damping: 34 }}
+                style={{
+                  position: 'fixed',
+                  left: pos.left,
+                  width: pos.width,
+                  ...(pos.acima ? { bottom: window.innerHeight - pos.top } : { top: pos.top }),
+                  transformOrigin: pos.acima ? 'bottom center' : 'top center',
+                }}
+                className="sel-painel z-[70] overflow-hidden rounded-2xl border border-line bg-card/95 p-1.5 shadow-[0_24px_60px_-20px_rgba(15,23,42,0.35),0_8px_20px_-12px_rgba(15,23,42,0.2)] outline-none backdrop-blur-xl"
+              >
+                {comBusca && (
+                  <div className="relative mb-1.5 px-0.5 pt-0.5">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                    <input
+                      ref={campoBusca}
+                      value={busca}
+                      onChange={(e) => {
+                        setBusca(e.target.value);
+                        setFoco(0);
+                      }}
+                      onKeyDown={teclado}
+                      placeholder="Buscar…"
+                      className="h-9 w-full rounded-xl border border-line bg-elevated/60 pl-9 pr-3 text-[13px] outline-none transition focus:border-brand/40 focus:bg-card"
+                      aria-label="Buscar opção"
+                    />
+                  </div>
+                )}
+                <div className="overflow-y-auto overscroll-contain" style={{ maxHeight: pos.maxH - (comBusca ? 46 : 0) }}>
+                  {visiveis.map((o, i) => {
+                    const escolhida = o.value === atual;
+                    return (
+                      <div
+                        key={o.value + i}
+                        data-i={i}
+                        role="option"
+                        aria-selected={escolhida}
+                        aria-disabled={o.disabled || undefined}
+                        onMouseEnter={() => setFoco(i)}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => escolher(o)}
+                        className={cn(
+                          'lg-track relative flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2 text-[13.5px] transition-colors',
+                          escolhida ? 'font-semibold text-brand' : 'text-fg',
+                          o.disabled && 'cursor-not-allowed opacity-40',
+                        )}
+                      >
+                        {foco === i && <motion.span layoutId={`sel-foco-${listaId}`} className="lg-glass rounded-xl" transition={{ type: 'spring', stiffness: 600, damping: 38 }} />}
+                        <span className="relative min-w-0 flex-1 truncate">{o.label}</span>
+                        {escolhida && (
+                          <motion.span className="relative" initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 600, damping: 20 }}>
+                            <Check className="h-4 w-4" />
+                          </motion.span>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {!visiveis.length && <p className="px-3 py-4 text-center text-[13px] text-muted">Nada encontrado.</p>}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>,
+          document.body,
+        )}
+    </>
   );
-});
+}
 
 // ---------------------------------------------------------------- Skeleton / estados
 
@@ -337,8 +597,9 @@ export function Pills<T extends string>({
   label?: string;
 }) {
   const grupo = useId();
+  const [sobre, setSobre] = useState<T | null>(null);
   return (
-    <div role="tablist" aria-label={label} className={cn('flex gap-1 overflow-x-auto rounded-full border border-line bg-card p-1 shadow-sm', className)}>
+    <div role="tablist" aria-label={label} onMouseLeave={() => setSobre(null)} className={cn('flex gap-1 overflow-x-auto rounded-full border border-line bg-card p-1 shadow-sm', className)}>
       {itens.map((i) => {
         const ativo = i.value === value;
         return (
@@ -347,17 +608,32 @@ export function Pills<T extends string>({
             role="tab"
             aria-selected={ativo}
             onClick={() => onChange(i.value)}
+            onMouseEnter={() => setSobre(i.value)}
             className={cn(
-              'relative inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors duration-200',
+              'lg-track relative inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors duration-200',
               ativo ? 'text-primary-fg' : 'text-muted hover:text-fg',
             )}
           >
+            <AnimatePresence>
+              {sobre === i.value && !ativo && (
+                <motion.span
+                  layoutId={`vidro-${grupo}`}
+                  className="lg-glass rounded-full"
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ type: 'spring', stiffness: 420, damping: 26, mass: 0.7 }}
+                />
+              )}
+            </AnimatePresence>
             {ativo && (
               <motion.span
                 layoutId={`pill-${grupo}`}
                 className="absolute inset-0 rounded-full bg-primary shadow-md"
                 transition={{ type: 'spring', stiffness: 500, damping: 38 }}
-              />
+              >
+                <span className="lg-btn !opacity-100" data-v="solido" style={{ zIndex: 0 }} />
+              </motion.span>
             )}
             <span className="relative z-10 inline-flex items-center gap-1.5">
               {i.label}
@@ -375,8 +651,9 @@ export function Pills<T extends string>({
 /** Abas com sublinhado deslizante (para seções dentro de uma página). */
 export function Tabs<T extends string>({ value, onChange, itens, className }: { value: T; onChange: (v: T) => void; itens: { value: T; label: ReactNode; count?: number }[]; className?: string }) {
   const grupo = useId();
+  const [sobre, setSobre] = useState<T | null>(null);
   return (
-    <div role="tablist" className={cn('flex gap-6 border-b border-line', className)}>
+    <div role="tablist" onMouseLeave={() => setSobre(null)} className={cn('flex gap-6 border-b border-line', className)}>
       {itens.map((i) => {
         const ativo = i.value === value;
         return (
@@ -385,10 +662,25 @@ export function Tabs<T extends string>({ value, onChange, itens, className }: { 
             role="tab"
             aria-selected={ativo}
             onClick={() => onChange(i.value)}
-            className={cn('relative -mb-px inline-flex items-center gap-2 pb-3 pt-1 text-[14px] font-medium transition-colors', ativo ? 'text-fg' : 'text-muted hover:text-fg')}
+            onMouseEnter={() => setSobre(i.value)}
+            className={cn('lg-track relative -mb-px inline-flex items-center gap-2 pb-3 pt-1 text-[14px] font-medium transition-colors', ativo ? 'text-fg' : 'text-muted hover:text-fg')}
           >
-            {i.label}
-            {i.count !== undefined && <span className={cn('tabular rounded-full px-1.5 text-[11px]', ativo ? 'bg-brand text-white' : 'bg-elevated text-muted')}>{i.count}</span>}
+            <AnimatePresence>
+              {sobre === i.value && (
+                <motion.span
+                  layoutId={`vidro-tab-${grupo}`}
+                  className="lg-glass !-inset-x-3 !-top-1.5 !bottom-1.5 rounded-xl"
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ type: 'spring', stiffness: 420, damping: 26, mass: 0.7 }}
+                />
+              )}
+            </AnimatePresence>
+            <span className="relative inline-flex items-center gap-2">
+              {i.label}
+              {i.count !== undefined && <span className={cn('tabular rounded-full px-1.5 text-[11px]', ativo ? 'bg-brand text-white' : 'bg-elevated text-muted')}>{i.count}</span>}
+            </span>
             {ativo && <motion.span layoutId={`tab-${grupo}`} className="absolute inset-x-0 -bottom-px h-[2px] rounded-full bg-brand" transition={{ type: 'spring', stiffness: 500, damping: 38 }} />}
           </button>
         );

@@ -33,6 +33,42 @@ export default function Usuarios() {
   const [senhaDe, setSenhaDe] = useState<UsuarioAdmin | null>(null);
   const [removerU, setRemoverU] = useState<UsuarioAdmin | null>(null);
   const [statusPara, setStatusPara] = useState<string[] | null>(null);
+  const acoes = (u: UsuarioAdmin) => (
+    <>
+          {u.ativo && (
+            <Button variant="ghost" size="sm" loading={convidando === u.id} onClick={() => convidar(u)} title="Enviar link para criar/redefinir senha">
+              <MailPlus className="h-4 w-4" /> <span className="hidden 2xl:inline">{u.temSenha ? 'Redefinir' : 'Convidar'}</span>
+            </Button>
+          )}
+          <Button variant="ghost" size="sm" onClick={() => { setErro(null); setForm({ id: u.id, nome: u.nome, email: u.email, tr: u.tr, perfil: u.perfil, ativo: u.ativo, areas: u.areas, enviarConvite: false }); }}>
+            <Pencil className="h-4 w-4" /> <span className="hidden 2xl:inline">Editar</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setStatusPara([u.id])}
+            title={u.ativo && u.email ? 'Enviar status das NCs por e-mail' : 'Usuário inativo'}
+            aria-label={`Enviar status das NCs para ${u.nome}`}
+            disabled={!u.ativo || (u.perfil !== 'ADMIN' && !u.areas.length)}
+          >
+            <Send className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setSenhaDe(u)} title="Alterar senha" aria-label={`Alterar senha de ${u.nome}`}>
+            <KeyRound className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setRemoverU(u)}
+            title="Remover usuário"
+            aria-label={`Remover ${u.nome}`}
+            className={cn('text-danger hover:bg-danger/10 hover:text-danger', u.id === eu?.id && 'invisible')}
+            disabled={u.id === eu?.id}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+    </>
+  );
 
   async function salvar() {
     if (!form) return;
@@ -91,7 +127,40 @@ export default function Usuarios() {
         ) : !q.data ? (
           <div className="space-y-2 p-5">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-14" />)}</div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <ul className="divide-y divide-line/60 xl:hidden">
+            {q.data.itens.map((u, i) => (
+              <li key={u.id} className={cn('anim-fade-up p-4', !u.ativo && 'opacity-55')} style={{ ['--d' as string]: `${i * 40}ms` }}>
+                <div className="flex items-start gap-3">
+                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-elevated text-[12px] font-semibold">{iniciais(u.nome)}</div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <p className="font-medium">{u.nome}</p>
+                      {!u.ativo ? <Badge>Inativo</Badge> : u.temSenha ? <Badge tom="success">Ativo</Badge> : <Badge tom="warning">Aguardando senha</Badge>}
+                    </div>
+                    <p className="truncate text-[12px] text-muted">
+                      {u.email}
+                      {u.tr && ` · ${u.tr}`}
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {u.perfil === 'ADMIN' ? (
+                        <Badge tom="brand">
+                          <ShieldCheck className="h-3 w-3" /> Admin
+                        </Badge>
+                      ) : u.areas.length ? (
+                        u.areas.map((a) => <Badge key={a}>{a}</Badge>)
+                      ) : (
+                        <span className="text-[12px] text-warning">Sem área</span>
+                      )}
+                    </div>
+                    <p className="mt-1.5 text-[12px] text-muted">Último acesso: {u.ultimo_acesso ? fmtDataHora(u.ultimo_acesso) : 'nunca'}</p>
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center justify-end gap-1 border-t border-line/60 pt-2">{acoes(u)}</div>
+              </li>
+            ))}
+          </ul>
+          <div className="hidden overflow-x-auto xl:block">
             <table className="w-full text-[13px]">
               <thead>
                 <tr className="border-b border-line text-[12px] text-muted">
@@ -135,44 +204,14 @@ export default function Usuarios() {
                     </td>
                     <td className="tabular whitespace-nowrap px-3 py-3 text-muted">{u.ultimo_acesso ? fmtDataHora(u.ultimo_acesso) : 'Nunca'}</td>
                     <td className="whitespace-nowrap py-3 pl-2 pr-3 text-right">
-                      {u.ativo && (
-                        <Button variant="ghost" size="sm" loading={convidando === u.id} onClick={() => convidar(u)} title="Enviar link para criar/redefinir senha">
-                          <MailPlus className="h-4 w-4" /> <span className="hidden 2xl:inline">{u.temSenha ? 'Redefinir' : 'Convidar'}</span>
-                        </Button>
-                      )}
-                      <Button variant="ghost" size="sm" onClick={() => { setErro(null); setForm({ id: u.id, nome: u.nome, email: u.email, tr: u.tr, perfil: u.perfil, ativo: u.ativo, areas: u.areas, enviarConvite: false }); }}>
-                        <Pencil className="h-4 w-4" /> <span className="hidden 2xl:inline">Editar</span>
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setStatusPara([u.id])}
-                        title={u.ativo && u.email ? 'Enviar status das NCs por e-mail' : 'Usuário inativo'}
-                        aria-label={`Enviar status das NCs para ${u.nome}`}
-                        disabled={!u.ativo || (u.perfil !== 'ADMIN' && !u.areas.length)}
-                      >
-                        <Send className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => setSenhaDe(u)} title="Alterar senha" aria-label={`Alterar senha de ${u.nome}`}>
-                        <KeyRound className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setRemoverU(u)}
-                        title="Remover usuário"
-                        aria-label={`Remover ${u.nome}`}
-                        className={cn('text-danger hover:bg-danger/10 hover:text-danger', u.id === eu?.id && 'invisible')}
-                        disabled={u.id === eu?.id}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {acoes(u)}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          </>
         )}
       </Card>
 

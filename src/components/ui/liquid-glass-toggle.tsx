@@ -398,7 +398,8 @@ export function LiquidToggle({
       step(dt, now)
       draw()
       const busy = s.moving || s.drag.id !== -1 || s.rips.length || s.sats.length || s.mouse.s > 0.01
-      if (s.visible && (!s.reduce || busy)) s.raf = requestAnimationFrame(tick)
+      // só anima enquanto há movimento (antes ficava a 60 fps o tempo todo por causa das ondas de fundo)
+      if (s.visible && busy) s.raf = requestAnimationFrame(tick)
       else s.raf = 0
     }
     s.raf = requestAnimationFrame(tick)

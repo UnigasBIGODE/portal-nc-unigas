@@ -1,5 +1,6 @@
 import { useRef, useState, type FormEvent } from 'react';
-import { Camera, Moon, ShieldCheck, Sun, Trash2 } from 'lucide-react';
+import { Camera, Feather, Gauge, Moon, ShieldCheck, Sparkles, Sun, Trash2 } from 'lucide-react';
+import { definirPreferenciaDesempenho, preferenciaDesempenho, useModoLeve, type PreferenciaDesempenho } from '@/lib/desempenho';
 import { motion } from 'framer-motion';
 import { Avatar, prepararFotoPerfil } from '@/components/Avatar';
 import { api, mensagemErro } from '@/lib/api';
@@ -15,6 +16,8 @@ export default function Conta() {
   const arquivo = useRef<HTMLInputElement>(null);
   const [enviandoFoto, setEnviandoFoto] = useState(false);
   const [previa, setPrevia] = useState<string | null>(null);
+  const [pref, setPref] = useState<PreferenciaDesempenho>(preferenciaDesempenho);
+  const leve = useModoLeve();
   const { tema, setTema } = useTheme();
   const toast = useToast();
   const [atual, setAtual] = useState('');
@@ -139,6 +142,27 @@ export default function Conta() {
               ]}
               className="w-fit"
             />
+            <div className="mt-5 border-t border-line pt-4">
+              <p className="text-sm font-semibold">Desempenho</p>
+              <p className="mb-3 mt-0.5 text-[13px] text-muted">
+                Se o portal estiver travando neste computador, use o modo <b>Leve</b>: mesmo visual, sem os efeitos de vidro desfocado e animações contínuas.
+                {pref === 'auto' && leve && ' (O modo automático já ligou o Leve neste computador.)'}
+              </p>
+              <Pills
+                value={pref}
+                onChange={(v) => {
+                  setPref(v as PreferenciaDesempenho);
+                  definirPreferenciaDesempenho(v as PreferenciaDesempenho);
+                }}
+                label="Desempenho"
+                itens={[
+                  { value: 'auto', label: <><Gauge className="h-3.5 w-3.5" /> Automático</> },
+                  { value: 'leve', label: <><Feather className="h-3.5 w-3.5" /> Leve</> },
+                  { value: 'completo', label: <><Sparkles className="h-3.5 w-3.5" /> Completo</> },
+                ]}
+                className="w-fit"
+              />
+            </div>
           </div>
         </Card>
 

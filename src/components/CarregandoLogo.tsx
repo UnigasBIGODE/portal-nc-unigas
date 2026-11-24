@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTheme } from '@/context/ThemeContext';
 import { GlassIconReveal } from '@/components/ui/liquid-glass-logo-reveal';
 import { cn } from '@/lib/utils';
+import { useModoLeve } from '@/lib/desempenho';
 
 /** Cores do fundo do portal (iguais a --bg em index.css): o canvas pinta o próprio fundo. */
 const FUNDO = { light: '#F5F6F8', dark: '#0B0B0D' } as const;
@@ -14,7 +15,14 @@ export const DURACAO_REVELACAO = Math.round(((2.4 + 1.1) / VELOCIDADE) * 1000);
 /** Logo da Unigás surgindo de uma gota de vidro líquido. */
 export function LogoVidro({ className }: { className?: string }) {
   const { tema } = useTheme();
+  const leve = useModoLeve();
   const escuro = tema === 'dark';
+  if (leve)
+    return (
+      <div className={cn('grid place-items-center bg-bg', className)}>
+        <img src={escuro ? './logo-dark.png' : './logo-light.png'} alt="Unigás" className="w-[min(220px,50%)] animate-pulse" />
+      </div>
+    );
   return (
     <GlassIconReveal
       logo={escuro ? './logo-dark.png' : './logo-light.png'}
@@ -67,7 +75,7 @@ export function CarregandoPagina() {
 export function AberturaPortal() {
   const [fase, setFase] = useState<'mostrando' | 'saindo' | 'fim'>(() => {
     try {
-      return sessionStorage.getItem('unigas_abertura') ? 'fim' : 'mostrando';
+      return sessionStorage.getItem('unigas_abertura') || document.documentElement.classList.contains('leve') ? 'fim' : 'mostrando';
     } catch {
       return 'mostrando';
     }

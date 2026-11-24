@@ -10,7 +10,9 @@ import { ThemeProvider } from './context/ThemeContext';
 import { MODO_DEMO, type ApiError } from './lib/api';
 import { iniciarPwa } from './lib/pwa';
 import { iniciarLiquidGlass } from './lib/liquidGlass';
+import { iniciarDesempenho } from './lib/desempenho';
 
+iniciarDesempenho();
 iniciarPwa();
 iniciarLiquidGlass();
 

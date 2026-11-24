@@ -151,9 +151,8 @@ export default function Dashboard() {
   const carregado = !!d;
   useGSAP(
     () => {
-      if (!carregado || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      if (!carregado || window.matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.classList.contains('leve')) return;
       const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
-      tl.fromTo(palco.current, { filter: 'blur(5px)', opacity: 0.6 }, { filter: 'blur(0px)', opacity: 1, duration: 0.32, clearProps: 'filter,opacity' }, 0);
       tl.from('[data-vg-entra]', { y: 18, opacity: 0, stagger: 0.045, duration: 0.5, clearProps: 'transform,opacity' }, 0.035);
     },
     { scope: palco, dependencies: [carregado] },

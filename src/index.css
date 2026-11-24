@@ -238,8 +238,8 @@
 
 /* Entrada das páginas (v1.3.1): só CSS, termina sempre visível */
 @keyframes pagina-in {
-  from { opacity: 0; transform: translateY(16px); filter: blur(5px); }
-  to { opacity: 1; transform: none; filter: none; }
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
 }
 .anim-pagina { animation: pagina-in 0.42s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
 @media (prefers-reduced-motion: reduce) { .anim-pagina { animation: none; } }
@@ -421,11 +421,10 @@
   border-radius: 50%;
   filter: blur(60px);
   opacity: 0.55;
-  animation: vg-deriva 22s ease-in-out infinite alternate;
 }
 .vg-cena i:nth-child(1) { width: 34vw; height: 34vw; left: 52%; top: -8%; background: rgb(227 6 19 / 30%); }
-.vg-cena i:nth-child(2) { width: 26vw; height: 26vw; left: 6%; top: 46%; background: rgb(255 128 96 / 32%); animation-duration: 28s; animation-direction: alternate-reverse; }
-.vg-cena i:nth-child(3) { width: 22vw; height: 22vw; left: 70%; top: 58%; background: rgb(255 196 180 / 40%); animation-duration: 25s; }
+.vg-cena i:nth-child(2) { width: 26vw; height: 26vw; left: 6%; top: 46%; background: rgb(255 128 96 / 32%); }
+.vg-cena i:nth-child(3) { width: 22vw; height: 22vw; left: 70%; top: 58%; background: rgb(255 196 180 / 40%); }
 .dark .vg-cena i { opacity: 0.35; }
 @keyframes vg-deriva {
   from { transform: translate3d(0, 0, 0) scale(1); }
@@ -539,8 +538,8 @@
   background: conic-gradient(from var(--vg-giro, 0deg), #ff8a92, #e30613, #ffd0c4, #ff8a92);
   opacity: 0;
   transition: opacity 0.3s ease;
-  animation: vg-giro 2.4s linear infinite;
 }
+.vg-avatar:hover::before { animation: vg-giro 2.4s linear infinite; }
 .vg-avatar::after {
   content: '';
   position: absolute;
@@ -628,3 +627,34 @@
 @media (prefers-reduced-transparency: reduce) {
   .vg-trilho, .vg-palco, .vg-painel { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgb(var(--card)); }
 }
+
+/* ==================================================================
+   MODO LEVE (computadores mais simples) — classe "leve" no <html>.
+   Mesmo visual, sem desfoque de fundo e sem animações contínuas.
+================================================================== */
+.leve {
+  --vg-rail: rgb(var(--card) / 0.97);
+  --vg-frame: rgb(var(--card) / 0.55);
+  --vg-card: rgb(var(--card));
+  --vg-card-light: transparent;
+  --vg-raised: rgb(var(--card));
+  --vg-inner: rgb(var(--elevated) / 0.7);
+}
+.leve *,
+.leve *::before,
+.leve *::after {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+.leve .vg-cena { display: none; }
+.leve .vg-orbe,
+.leve .vg-avatar::before,
+.leve .vg-avatar::after,
+.leve .vg-digitar,
+.leve .anim-ping,
+.leve .anim-pagina { animation: none !important; }
+.leve .vg-avatar::after { display: none; }
+.leve .lg-glass { filter: none !important; }
+.leve .vg-palco,
+.leve .vg-painel,
+.leve .vg-trilho { transition: none; }

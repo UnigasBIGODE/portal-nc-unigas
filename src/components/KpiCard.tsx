@@ -39,6 +39,8 @@ export function KpiCard({
   onClick,
   indice = 0,
   serie,
+  vidro,
+  destaque,
 }: {
   label: string;
   numero: number | null | undefined;
@@ -55,30 +57,35 @@ export function KpiCard({
   indice?: number;
   /** Minigráfico de tendência. */
   serie?: (number | null)[];
+  /** Estilo de vidro (dashboard). */
+  vidro?: boolean;
+  /** Cartão principal em vermelho Unigás (com `vidro`). */
+  destaque?: boolean;
 }) {
   const Comp = onClick ? 'button' : 'div';
-  return (
-    <Card tilt className="anim-fade-up group relative overflow-hidden" style={{ '--d': `${indice * 70}ms` } as CSSProperties}>
+  const branco = vidro && destaque;
+  const conteudo = (
+    <>
       <span
         className={cn('pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full opacity-0 blur-2xl transition-opacity duration-500 group-hover:opacity-100', tom === 'danger' || tom === 'brand' ? 'bg-brand/15' : 'bg-fg/5')}
         aria-hidden
       />
       <Comp onClick={onClick} className="relative flex h-full w-full flex-col p-5 text-left">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[13px] font-medium text-muted">{label}</span>
-          {icon && <span className={cn('grid h-9 w-9 place-items-center rounded-xl ring-1 transition-transform duration-300 group-hover:scale-110', TONS[tom])}>{icon}</span>}
+          <span className={cn('text-[13px] font-medium', branco ? 'text-white/85' : vidro ? 'font-semibold text-[var(--vg-muted)]' : 'text-muted')}>{label}</span>
+          {icon && (vidro ? <span className={cn('vg-chip h-9 w-9 transition-transform duration-300 group-hover:scale-110', !branco && TONS[tom].split(' ')[1])}>{icon}</span> : <span className={cn('grid h-9 w-9 place-items-center rounded-xl ring-1 transition-transform duration-300 group-hover:scale-110', TONS[tom])}>{icon}</span>)}
         </div>
-        <div className={cn('tabular mt-3 text-[38px] font-bold leading-none tracking-tight', tom === 'danger' && numero ? 'text-danger' : 'text-fg')}>
+        <div className={cn('tabular mt-3 font-bold leading-none', vidro ? 'text-[clamp(30px,2.6vw,40px)] font-[820] tracking-[-0.052em]' : 'text-[38px] tracking-tight', branco ? 'text-white' : tom === 'danger' && numero ? 'text-danger' : vidro ? 'text-[var(--vg-ink)]' : 'text-fg')}>
           <NumeroAnimado valor={numero} casas={casas} sufixo={sufixo} />
         </div>
-        {serie && serie.filter((x) => x !== null).length > 1 && <Sparkline serie={serie} tom={tom} atraso={0.4 + indice * 0.07} />}
+        {serie && serie.filter((x) => x !== null).length > 1 && <Sparkline serie={serie} tom={branco ? 'branco' : tom} atraso={0.4 + indice * 0.07} />}
         {barra && (
-          <div className="relative mt-4 h-1.5 overflow-hidden rounded-full bg-elevated">
+          <div className={cn('relative mt-4 h-1.5 overflow-hidden rounded-full', vidro ? 'bg-[var(--vg-track)]' : 'bg-elevated')}>
             <div className={cn('anim-grow-x h-full rounded-full', barra.cor ?? 'bg-brand')} style={{ width: `${Math.min(100, Math.max(0, barra.valor))}%`, ['--d' as string]: `${300 + indice * 70}ms` }} />
             {barra.meta !== undefined && <div className="absolute top-0 h-full w-0.5 bg-fg/50" style={{ left: `${barra.meta}%` }} title={`Meta ${barra.meta}%`} />}
           </div>
         )}
-        <div className="mt-3 flex min-h-[22px] flex-wrap items-center gap-2 text-[12px] text-muted">
+        <div className={cn('mt-3 flex min-h-[22px] flex-wrap items-center gap-2 text-[12px]', branco ? 'text-white/80' : vidro ? 'font-medium text-[var(--vg-muted)]' : 'text-muted')}>
           {delta !== undefined && delta !== null && (
             <>
               <span
@@ -96,6 +103,17 @@ export function KpiCard({
           {hint}
         </div>
       </Comp>
+    </>
+  );
+  if (vidro)
+    return (
+      <div data-vg-entra className={cn('group relative overflow-hidden transition-transform duration-300 hover:-translate-y-0.5', branco ? 'vg-destaque' : 'vg-painel')}>
+        {conteudo}
+      </div>
+    );
+  return (
+    <Card tilt className="anim-fade-up group relative overflow-hidden" style={{ '--d': `${indice * 70}ms` } as CSSProperties}>
+      {conteudo}
     </Card>
   );
 }
@@ -119,7 +137,7 @@ export function Sparkline({ serie, tom = 'neutral', atraso = 0 }: { serie: (numb
   const pts = vals.map((v, i) => [(i / (vals.length - 1)) * W, H - 3 - ((v - min) / (max - min || 1)) * (H - 8)]);
   const linha = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
   const area = `${linha} L${W},${H} L0,${H} Z`;
-  const cor = tom === 'success' ? 'rgb(var(--success))' : tom === 'info' ? 'rgb(var(--info))' : 'rgb(var(--brand))';
+  const cor = tom === 'branco' ? '#ffffff' : tom === 'success' ? 'rgb(var(--success))' : tom === 'info' ? 'rgb(var(--info))' : 'rgb(var(--brand))';
   const ultimo = pts[pts.length - 1];
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="mt-3 h-10 w-full overflow-visible" preserveAspectRatio="none" aria-hidden>

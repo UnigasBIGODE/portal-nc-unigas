@@ -12,13 +12,12 @@ const col = createColumnHelper<NC>();
 
 /** Colunas secundárias somem em telas menores (prioridade de informação). */
 const RESPONSIVO: Record<string, string> = {
-  gerencia: 'hidden 2xl:table-cell',
-  data_execucao: 'hidden xl:table-cell',
-  data_cadastro: 'hidden lg:table-cell',
+  data_execucao: 'hidden 2xl:table-cell',
+  data_cadastro: 'hidden 2xl:table-cell',
 };
 
 export const COLUNAS_PADRAO = [
-  'nc_id', 'area', 'titulo', 'criticidade', 'gerencia', 'data_cadastro', 'prazo', 'data_execucao', 'etapa', 'status_prazo', 'dias_atraso',
+  'nc_id', 'area', 'titulo', 'criticidade', 'data_cadastro', 'prazo', 'data_execucao', 'etapa', 'status_prazo', 'dias_atraso',
 ] as const;
 
 function todasColunas(selecao?: (nc: NC) => ReactNode) {
@@ -26,17 +25,16 @@ function todasColunas(selecao?: (nc: NC) => ReactNode) {
   if (selecao) cols.push(col.display({ id: 'sel', header: '', cell: (c) => selecao(c.row.original), enableSorting: false }));
   cols.push(
     col.accessor('nc_id', { header: 'NC ID', cell: (c) => <span className="tabular font-semibold">{c.getValue()}</span> }),
-    col.accessor('area', { header: 'Área', cell: (c) => <span className={cn('whitespace-nowrap', c.getValue() === 'A classificar' && 'font-medium text-warning')}>{c.getValue()}</span> }),
+    col.accessor('area', { header: 'Área', cell: (c) => <span className={cn('2xl:whitespace-nowrap', c.getValue() === 'A classificar' && 'font-medium text-warning')}>{c.getValue()}</span> }),
     col.accessor('titulo', {
       header: 'Título',
       cell: (c) => (
-        <span className="line-clamp-2 min-w-[220px] max-w-[340px]" title={c.getValue()}>
+        <span className="line-clamp-2 min-w-[170px] break-words" title={c.getValue()}>
           {c.getValue() || '—'}
         </span>
       ),
     }),
     col.accessor('criticidade', { header: 'Crit.', cell: (c) => <CriticidadeBadge valor={c.getValue()} compacto /> }),
-    col.accessor('gerencia', { header: 'Gerência', cell: (c) => <span className="whitespace-nowrap text-muted">{c.getValue() || '—'}</span> }),
     col.accessor('data_cadastro', { header: 'Cadastro', cell: (c) => <span className="tabular whitespace-nowrap">{fmtData(c.getValue())}</span> }),
     col.accessor('prazo', { header: 'Prazo', cell: (c) => <span className="tabular whitespace-nowrap">{fmtData(c.getValue())}</span> }),
     col.accessor('data_execucao', { header: 'Execução', cell: (c) => <span className="tabular whitespace-nowrap">{c.getValue() ? fmtData(c.getValue()) : '—'}</span> }),
@@ -45,7 +43,7 @@ function todasColunas(selecao?: (nc: NC) => ReactNode) {
     col.accessor('dias_atraso', {
       header: 'Atraso',
       cell: (c) => (
-        <span className="inline-flex items-center gap-2 whitespace-nowrap">
+        <span className="flex flex-col items-start gap-1 whitespace-nowrap 2xl:flex-row 2xl:items-center 2xl:gap-2">
           <span className={cn('tabular font-semibold', c.getValue() > 0 ? 'text-danger' : 'text-muted')}>{c.getValue() ? `${c.getValue()} d` : '—'}</span>
           {c.row.original.aberta && c.row.original.nivel_alerta && <AlertaBadge nivel={c.row.original.nivel_alerta} />}
         </span>
@@ -102,8 +100,8 @@ export function NcTable({
   return (
     <>
       {/* Desktop/tablet: tabela */}
-      <div className={cn('hidden overflow-x-auto xl:block', carregando && 'opacity-60 transition-opacity')}>
-        <table className="w-full text-[13px]">
+      <div className={cn('hidden overflow-x-hidden xl:block', carregando && 'opacity-60 transition-opacity')}>
+        <table className="w-full table-auto text-[13px]">
           <thead>
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id} className="border-b border-line bg-elevated/60">
@@ -111,7 +109,7 @@ export function NcTable({
                   const pode = h.column.getCanSort() && h.column.id !== 'sel';
                   const dir = h.column.getIsSorted();
                   return (
-                    <th key={h.id} scope="col" className={cn(RESPONSIVO[h.column.id], 'whitespace-nowrap px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-muted first:pl-5 last:pr-5')} aria-sort={dir === 'asc' ? 'ascending' : dir === 'desc' ? 'descending' : undefined}>
+                    <th key={h.id} scope="col" className={cn(RESPONSIVO[h.column.id], 'whitespace-nowrap px-2.5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-muted first:pl-5 last:pr-5')} aria-sort={dir === 'asc' ? 'ascending' : dir === 'desc' ? 'descending' : undefined}>
                       {pode ? (
                         <button className="inline-flex items-center gap-1 hover:text-fg" onClick={h.column.getToggleSortingHandler()}>
                           {flexRender(h.column.columnDef.header, h.getContext())}
@@ -123,7 +121,7 @@ export function NcTable({
                     </th>
                   );
                 })}
-                <th aria-hidden className="w-8" />
+                <th aria-hidden className="hidden w-8 2xl:table-cell" />
               </tr>
             ))}
           </thead>
@@ -144,11 +142,11 @@ export function NcTable({
                 className="group/row cursor-pointer border-b border-line/60 transition-colors duration-200 last:border-0 hover:bg-brand/[0.03] focus:bg-elevated"
               >
                 {r.getVisibleCells().map((c) => (
-                  <td key={c.id} className={cn(RESPONSIVO[c.column.id], 'px-3 py-3.5 align-middle first:pl-5 last:pr-5')}>
+                  <td key={c.id} className={cn(RESPONSIVO[c.column.id], 'px-2.5 py-3.5 align-middle first:pl-5 last:pr-5')}>
                     {flexRender(c.column.columnDef.cell, c.getContext())}
                   </td>
                 ))}
-                <td className="w-8 pr-4">
+                <td className="hidden w-8 pr-4 2xl:table-cell">
                   <ChevronRight className="h-4 w-4 -translate-x-2 text-muted opacity-0 transition-all duration-200 group-hover/row:translate-x-0 group-hover/row:opacity-100" />
                 </td>
               </motion.tr>

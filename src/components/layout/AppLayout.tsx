@@ -1,8 +1,10 @@
+import { CarregandoPagina } from '@/components/CarregandoLogo';
+import { LiquidToggle, NimbusToggleIcons } from '@/components/ui/liquid-glass-toggle';
 import { Component, Suspense, createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, NavLink, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { useIsFetching } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowUp, Bell, ChevronRight, ChevronsLeft, LifeBuoy, LogOut, Menu, Moon, Search, ShieldCheck, Smartphone, Sun, X } from 'lucide-react';
+import { ArrowUp, Bell, ChevronRight, ChevronsLeft, LifeBuoy, LogOut, Menu, Search, ShieldCheck, Smartphone, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useInstalarApp } from '@/lib/pwa';
 import { useToast } from '@/components/Toast';
@@ -29,7 +31,7 @@ function lerRecolhido() {
 // ---------------------------------------------------------------- item do menu
 
 /** Vidro compartilhado do menu: uma "gota" que desliza até o item sob o mouse. */
-const HoverMenu = createContext<{ hover: string | null; setHover: (v: string | null) => void }>({ hover: null, setHover: () => {} });
+const HoverMenu = createContext<{ hover: string | null; setHover: (v: string | null, el?: HTMLElement | null, rotulo?: string) => void }>({ hover: null, setHover: () => {} });
 
 /** Vidro deslizante reutilizado pelos itens do menu que não são links (Suporte, Sair…). */
 function VidroMenu({ id }: { id: string }) {
@@ -56,14 +58,15 @@ function ItemMenu({ item, recolhido, badge, indice }: { item: ItemNav; recolhido
   return (
     <NavLink
       to={item.to}
-      onMouseEnter={() => setHover(item.to)}
+      onMouseEnter={(e) => setHover(item.to, e.currentTarget, item.label)}
+      onFocus={(e) => setHover(item.to, e.currentTarget, item.label)}
       end={item.end}
-      title={recolhido ? item.label : undefined}
+      aria-label={recolhido ? item.label : undefined}
       style={{ ['--d' as string]: `${40 + indice * 30}ms` }}
       className={({ isActive }) =>
         cn(
           'anim-slide-right lg-track group relative flex h-10 items-center gap-3 rounded-xl px-3 text-[14px] font-medium outline-none transition-colors duration-200',
-          isActive ? 'text-brand' : 'text-muted hover:text-fg',
+          isActive ? 'font-semibold text-[var(--vg-pick-ink)]' : 'text-muted hover:text-fg',
           recolhido && 'justify-center px-0',
         )
       }
@@ -73,11 +76,9 @@ function ItemMenu({ item, recolhido, badge, indice }: { item: ItemNav; recolhido
           {isActive && (
             <motion.span
               layoutId="menu-ativo"
-              className="absolute inset-0 rounded-xl bg-brand/[0.07] ring-1 ring-brand/10"
-              transition={{ type: 'spring', stiffness: 500, damping: 40 }}
-            >
-              <span className="absolute -left-4 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-brand" />
-            </motion.span>
+              className="vg-pick absolute inset-0 rounded-xl"
+              transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+            />
           )}
           <AnimatePresence>
             {hover === item.to && (
@@ -131,14 +132,14 @@ function BotaoInstalar({ recolhido }: { recolhido: boolean }) {
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         whileTap={{ scale: 0.97 }}
-        onMouseEnter={() => setHover('instalar')}
+        onMouseEnter={(e) => setHover('instalar', e.currentTarget, 'Instalar app')}
         onClick={async (e) => {
           e.stopPropagation();
           if (podeInstalar) {
             if (await instalar()) toast({ tipo: 'sucesso', titulo: 'App instalado', descricao: 'Abra o Portal NC direto pela tela inicial.' });
           } else setIos(true);
         }}
-        title={recolhido ? 'Instalar app' : undefined}
+        aria-label={recolhido ? 'Instalar app' : undefined}
         className={cn('lg-track relative flex h-10 w-full items-center gap-3 overflow-hidden rounded-xl bg-brand/[0.07] px-3 text-[14px] font-semibold text-brand transition-colors hover:bg-brand/[0.12]', recolhido && 'justify-center px-0')}
       >
         <motion.span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent" initial={{ x: '-100%' }} animate={{ x: '100%' }} transition={{ duration: 1.8, repeat: Infinity, repeatDelay: 4 }} aria-hidden />
@@ -171,21 +172,44 @@ function Sidebar({ aberto, fechar, recolhido, alternarRecolhido }: { aberto: boo
     return () => mq.removeEventListener('change', f);
   }, []);
   const [hoverMenu, setHoverMenu] = useState<string | null>(null);
+  const [dica, setDica] = useState<{ rotulo: string; y: number } | null>(null);
+  const definirHover = (v: string | null, el?: HTMLElement | null, rotulo?: string) => {
+    setHoverMenu(v);
+    if (el && rotulo) {
+      const b = el.getBoundingClientRect();
+      setDica({ rotulo, y: b.top + b.height / 2 });
+    } else setDica(null);
+  };
   if (!usuario) return null;
   const r = desktop && recolhido;
   const areasTxt = usuario.areas.join(' · ');
 
   return (
-    <HoverMenu.Provider value={{ hover: hoverMenu, setHover: setHoverMenu }}>
+    <HoverMenu.Provider value={{ hover: hoverMenu, setHover: definirHover }}>
       <AnimatePresence>
         {aberto && !desktop && (
           <motion.div className="fixed inset-0 z-40 bg-[#0B0B0D]/40 backdrop-blur-[3px]" onClick={fechar} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
         )}
       </AnimatePresence>
+      <AnimatePresence>
+        {r && dica && hoverMenu && (
+          <motion.span
+            key="dica"
+            className="vg-dica-flutuante pointer-events-none fixed z-[70] whitespace-nowrap rounded-[9px] border border-[var(--vg-rim)] bg-[var(--vg-pick)] px-2.5 py-1.5 text-[12px] font-semibold text-[var(--vg-ink)] shadow-[0_3px_10px_rgb(var(--vg-sombra)/0.18)]"
+            style={{ left: LARGURA.recolhido + 10 }}
+            initial={{ opacity: 0, x: -6, top: dica.y, y: '-50%' }}
+            animate={{ opacity: 1, x: 0, top: dica.y, y: '-50%' }}
+            exit={{ opacity: 0, x: -4, transition: { duration: 0.12 } }}
+            transition={{ type: 'spring', stiffness: 520, damping: 38 }}
+          >
+            {dica.rotulo}
+          </motion.span>
+        )}
+      </AnimatePresence>
       <motion.aside
-        onMouseLeave={() => setHoverMenu(null)}
+        onMouseLeave={() => definirHover(null)}
         aria-label="Menu principal"
-        className="fixed inset-y-0 left-0 z-50 flex flex-col border-r border-line bg-card"
+        className="vg-trilho fixed inset-y-0 left-0 z-50 flex flex-col !rounded-none !border-y-0 !border-l-0"
         initial={false}
         animate={{ width: r ? LARGURA.recolhido : LARGURA.aberto, x: desktop || aberto ? 0 : -LARGURA.aberto - 10 }}
         transition={{ type: 'spring', stiffness: 380, damping: 38 }}
@@ -213,10 +237,12 @@ function Sidebar({ aberto, fechar, recolhido, alternarRecolhido }: { aberto: boo
           )}
         </div>
 
-        <div className={cn('mx-4 mb-4 flex items-center gap-3 rounded-2xl border border-line bg-elevated/60 p-2.5 transition-all', r && 'mx-3 justify-center border-transparent bg-transparent p-0')}>
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-brand to-[#9b0410] text-[13px] font-semibold text-white shadow-md shadow-brand/30 ring-2 ring-card" title={r ? usuario.nome : undefined}>
-            {iniciais(usuario.nome)}
-          </div>
+        <div className={cn('vg-painel mx-4 mb-4 flex items-center gap-3 !rounded-2xl p-2.5 transition-all', r && 'mx-3 justify-center !border-transparent !bg-none !bg-transparent p-0 !shadow-none')}>
+          <motion.div initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', stiffness: 360, damping: 15, delay: 0.15 }}>
+            <Link to="/conta" onClick={fechar} className="vg-avatar grid h-10 w-10 shrink-0 place-items-center text-[13px] font-semibold" title={usuario.nome} aria-label="Minha conta">
+              <span className="relative">{iniciais(usuario.nome)}</span>
+            </Link>
+          </motion.div>
           {!r && (
             <div className="min-w-0">
               <p className="truncate text-[14px] font-semibold">{usuario.nome}</p>
@@ -257,8 +283,8 @@ function Sidebar({ aberto, fechar, recolhido, alternarRecolhido }: { aberto: boo
           <ItemMenu item={CONTA} indice={20} recolhido={r} />
           <a
             href={config?.emailSuporte ? `mailto:${config.emailSuporte}?subject=Portal%20de%20NCs` : '#'}
-            title={r ? `Suporte${config?.emailSuporte ? ': ' + config.emailSuporte : ''}` : undefined}
-            onMouseEnter={() => setHoverMenu('suporte')}
+            aria-label={r ? `Suporte${config?.emailSuporte ? ': ' + config.emailSuporte : ''}` : undefined}
+            onMouseEnter={(e) => definirHover('suporte', e.currentTarget, 'Suporte')}
             className={cn('lg-track group relative flex h-10 items-center gap-3 rounded-xl px-3 text-[14px] font-medium text-muted transition-colors hover:text-fg', r && 'justify-center px-0')}
           >
             <VidroMenu id="suporte" />
@@ -270,8 +296,8 @@ function Sidebar({ aberto, fechar, recolhido, alternarRecolhido }: { aberto: boo
               await logout();
               navigate('/login');
             }}
-            title={r ? 'Sair' : undefined}
-            onMouseEnter={() => setHoverMenu('sair')}
+            aria-label={r ? 'Sair' : undefined}
+            onMouseEnter={(e) => definirHover('sair', e.currentTarget, 'Sair')}
             className={cn('lg-track group relative flex h-10 w-full items-center gap-3 rounded-xl px-3 text-[14px] font-medium text-muted transition-colors hover:text-danger', r && 'justify-center px-0')}
           >
             <VidroMenu id="sair" />
@@ -283,7 +309,7 @@ function Sidebar({ aberto, fechar, recolhido, alternarRecolhido }: { aberto: boo
         {desktop && (
           <button
             onClick={alternarRecolhido}
-            className="absolute -right-3 top-[86px] grid h-6 w-6 place-items-center rounded-full border border-line bg-card text-muted shadow-sm transition-colors hover:text-fg"
+            className="vg-botao absolute -right-3 top-[86px] h-6 w-6 !bg-[var(--vg-raised)] text-muted hover:text-fg"
             aria-label={recolhido ? 'Expandir menu' : 'Recolher menu'}
           >
             <motion.span animate={{ rotate: recolhido ? 180 : 0 }} transition={{ duration: 0.3 }}>
@@ -315,17 +341,17 @@ function Sino() {
   const total = (data?.criticos ?? 0) + (data?.atencao ?? 0);
   return (
     <div className="relative" ref={ref}>
-      <Button variant="secondary" size="icon" onClick={() => setAberto((v) => !v)} aria-label={`Alertas: ${total} pendentes`} aria-expanded={aberto}>
+      <button className="vg-botao relative h-10 w-10" onClick={() => setAberto((v) => !v)} aria-label={`Alertas: ${total} pendentes`} aria-expanded={aberto}>
         <motion.span animate={total ? { rotate: [0, -14, 12, -8, 6, 0] } : {}} transition={{ duration: 0.9, delay: 1.2, repeat: Infinity, repeatDelay: 8 }}>
           <Bell className="h-[18px] w-[18px]" />
         </motion.span>
         {total > 0 && (
           <span className="absolute -right-1 -top-1 flex h-5 min-w-5">
             {(data?.criticos ?? 0) > 0 && <span className="anim-ping absolute inset-0 rounded-full bg-brand" aria-hidden />}
-            <span className="tabular relative grid h-5 min-w-5 place-items-center rounded-full bg-brand px-1 text-[11px] font-semibold text-white ring-2 ring-bg">{total > 99 ? '99+' : total}</span>
+            <span className="tabular relative grid h-5 min-w-5 place-items-center rounded-full bg-brand px-1 text-[11px] font-semibold text-white ring-2 ring-white/80 dark:ring-black/40">{total > 99 ? '99+' : total}</span>
           </span>
         )}
-      </Button>
+      </button>
       <AnimatePresence>
         {aberto && (
           <motion.div
@@ -333,7 +359,7 @@ function Sino() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.97, transition: { duration: 0.12 } }}
             transition={{ type: 'spring', stiffness: 450, damping: 32 }}
-            className="absolute right-0 z-40 mt-2 w-[min(92vw,400px)] origin-top-right overflow-hidden rounded-[20px] border border-line bg-card shadow-pop"
+            className="vg-trilho absolute right-0 z-40 mt-3 w-[min(92vw,400px)] origin-top-right overflow-hidden rounded-[22px] !bg-card/90 shadow-pop"
           >
             <div className="flex items-center justify-between border-b border-line px-5 py-4">
               <div>
@@ -409,11 +435,16 @@ function Topbar({ abrirMenu, abrirBusca }: { abrirMenu: () => void; abrirBusca: 
   const migalhas = trilha(loc.pathname);
   const mac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform);
   return (
-    <header className="sticky top-0 z-30 border-b border-line/70 bg-bg/75 backdrop-blur-xl">
-      <div className="mx-auto flex h-[72px] max-w-[1600px] items-center gap-3 px-4 sm:px-6 lg:px-10">
-        <Button variant="secondary" size="icon" className="lg:hidden" onClick={abrirMenu} aria-label="Abrir menu">
+    <header className="sticky top-0 z-30 px-3 pt-3 sm:px-6 lg:px-10">
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+        className="vg-trilho mx-auto flex h-[60px] max-w-[1600px] items-center gap-3 rounded-[22px] py-1.5 pl-2 pr-2 sm:rounded-full sm:pl-4"
+      >
+        <button className="vg-botao h-10 w-10 shrink-0 lg:hidden" onClick={abrirMenu} aria-label="Abrir menu">
           <Menu className="h-[18px] w-[18px]" />
-        </Button>
+        </button>
         <nav aria-label="Trilha" className="flex min-w-0 items-center gap-1.5 text-[13px]">
           <span className="hidden text-muted xl:inline">Portal NC</span>
           {migalhas.map((m, i) => {
@@ -441,30 +472,35 @@ function Topbar({ abrirMenu, abrirBusca }: { abrirMenu: () => void; abrirBusca: 
         <div className="ml-auto flex items-center gap-2">
           <button
             onClick={abrirBusca}
-            className="lg-hover lg-track group flex h-10 items-center gap-2.5 rounded-full border border-line bg-card pl-3.5 pr-2 text-[13px] text-muted shadow-sm hover:border-fg/15 hover:shadow-md sm:w-72"
+            className="vg-perguntar group flex h-10 w-10 items-center justify-center gap-2.5 rounded-full text-[13px] sm:w-80 sm:justify-start sm:pl-1.5 sm:pr-2"
             aria-label="Busca rápida"
           >
-            <Search className="h-4 w-4 transition-transform group-hover:scale-110" />
-            <span className="hidden flex-1 text-left sm:block">Buscar NC, página…</span>
-            <kbd className="hidden rounded-md border border-line bg-elevated px-1.5 py-0.5 font-sans text-[11px] sm:block">{mac ? '⌘' : 'Ctrl'} K</kbd>
+            <span className="vg-orbe hidden sm:block" aria-hidden />
+            <span key={loc.pathname} className="vg-digitar hidden flex-1 text-left font-medium sm:block">Buscar NC, página…</span>
+            <Search className="h-4 w-4 transition-transform group-hover:scale-110 sm:hidden" />
+            <kbd className="hidden rounded-md border border-line bg-card/70 px-1.5 py-0.5 font-sans text-[11px] sm:block">{mac ? '⌘' : 'Ctrl'} K</kbd>
           </button>
-          <Button variant="secondary" size="icon" onClick={(e) => alternar({ x: e.clientX, y: e.clientY })} aria-label={tema === 'dark' ? 'Usar tema claro' : 'Usar tema escuro'}>
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.span key={tema} initial={{ rotate: -90, opacity: 0, scale: 0.6 }} animate={{ rotate: 0, opacity: 1, scale: 1 }} exit={{ rotate: 90, opacity: 0, scale: 0.6 }} transition={{ duration: 0.25 }}>
-                {tema === 'dark' ? <Sun className="h-[18px] w-[18px]" /> : <Moon className="h-[18px] w-[18px]" />}
-              </motion.span>
-            </AnimatePresence>
-          </Button>
+          <LiquidToggle
+            size={34}
+            tone={tema === 'dark' ? 'dark' : 'light'}
+            checked={tema === 'dark'}
+            onCheckedChange={(escuro) => {
+              if (escuro === (tema === 'dark')) return;
+              const r = document.querySelector('.nimbus-toggle')?.getBoundingClientRect();
+              alternar(r ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : undefined);
+            }}
+            icons={{ off: NimbusToggleIcons.sun, on: NimbusToggleIcons.moon }}
+            label={tema === 'dark' ? 'Tema escuro ativo — mudar para claro' : 'Tema claro ativo — mudar para escuro'}
+            className="shrink-0"
+          />
           <Sino />
-          <Link
-            to="/conta"
-            className="lg-hover lg-track hidden h-10 w-10 place-items-center rounded-full bg-gradient-to-br from-brand to-[#9b0410] text-[13px] font-semibold text-white shadow-md shadow-brand/30 sm:grid"
-            aria-label="Minha conta"
-          >
-            {usuario ? iniciais(usuario.nome) : ''}
-          </Link>
+          <motion.span initial={{ scale: 0, rotate: -30 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: 'spring', stiffness: 380, damping: 16, delay: 0.25 }} className="hidden sm:block">
+            <Link to="/conta" className="vg-avatar grid h-10 w-10 place-items-center text-[13px] font-semibold" aria-label="Minha conta" title={usuario?.nome}>
+              <span className="relative">{usuario ? iniciais(usuario.nome) : ''}</span>
+            </Link>
+          </motion.span>
         </div>
-      </div>
+      </motion.div>
     </header>
   );
 }
@@ -586,15 +622,7 @@ export function AppLayout() {
         <main id="conteudo" className="mx-auto max-w-[1600px] px-4 pb-20 pt-7 sm:px-6 lg:px-10 lg:pt-9">
           <SaidaEntrada
             chave={loc.pathname}
-            carregando={<div className="space-y-4">
-                <Skeleton className="h-9 w-72" />
-                <div className="grid gap-4 md:grid-cols-3">
-                  <Skeleton className="h-36" />
-                  <Skeleton className="h-36" />
-                  <Skeleton className="h-36" />
-                </div>
-                <Skeleton className="h-80" />
-              </div>}
+            carregando={<CarregandoPagina />}
           />
         </main>
       </div>

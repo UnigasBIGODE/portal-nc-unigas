@@ -1,9 +1,8 @@
 import { lazy, type ReactNode } from 'react';
 import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
 import { useAuth } from './context/AuthContext';
 import { AppLayout } from './components/layout/AppLayout';
-import { Logo } from './components/Logo';
+import { AberturaPortal, TelaCarregamento } from './components/CarregandoLogo';
 import Login from './pages/Login';
 import { DefinirSenha, EsqueciSenha } from './pages/Senha';
 import Dashboard from './pages/Dashboard';
@@ -24,14 +23,7 @@ const Consolidado = lazy(() => import('./pages/admin/Consolidado'));
 const Pendencias = lazy(() => import('./pages/admin/Pendencias'));
 
 function Carregando() {
-  return (
-    <div className="grid min-h-screen place-items-center bg-bg">
-      <div className="flex flex-col items-center gap-6">
-        <Logo className="h-16 w-auto opacity-90" />
-        <Loader2 className="h-5 w-5 animate-spin text-muted" aria-label="Carregando" />
-      </div>
-    </div>
-  );
+  return <TelaCarregamento />;
 }
 
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -49,6 +41,8 @@ function RequireAdmin() {
 
 export default function App() {
   return (
+    <>
+    <AberturaPortal />
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/esqueci-senha" element={<EsqueciSenha />} />
@@ -81,5 +75,6 @@ export default function App() {
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </>
   );
 }

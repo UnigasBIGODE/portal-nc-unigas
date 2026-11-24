@@ -1,4 +1,8 @@
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { gsap } from 'gsap';
+import { useGSAP } from '@gsap/react';
+import '@fontsource-variable/manrope';
 import { Link, useNavigate } from 'react-router-dom';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
@@ -7,22 +11,22 @@ import { useAuth } from '@/context/AuthContext';
 import { api, mensagemErro } from '@/lib/api';
 import type { Dashboard as DashboardT, FiltrosNC } from '@/lib/types';
 import { cn, fmtDataHora, fmtPct, limparFiltros, primeiroNome } from '@/lib/utils';
-import { Button, Card, CardHeader, EmptyState, ErrorState, PageHeader, Skeleton } from '@/components/ui';
+import { Button, Card, CardHeader, EmptyState, ErrorState, Skeleton } from '@/components/ui';
 import { KpiCard, KpiSkeleton, NumeroAnimado } from '@/components/KpiCard';
 import { FiltrosBar, type Periodo } from '@/components/FiltrosBar';
 import { NcTable } from '@/components/NcTable';
 import { AbertasPorAreaChart, CadastradasChart, CriticidadeChart, EncerradasPorMesChart, GerenciaChart } from '@/components/charts/Charts';
-import { Reveal } from '@/components/motion';
 import { useTitulo } from '@/hooks/queries';
 
-function ChartCard({ title, description, children, className, carregando, atraso = 0, acao }: { title: string; description?: string; children: ReactNode; className?: string; carregando?: boolean; atraso?: number; acao?: ReactNode }) {
+gsap.registerPlugin(useGSAP);
+
+/** Painel de vidro (baseado no Glassy Dashboard). */
+function ChartCard({ title, description, children, className, carregando, acao }: { title: string; description?: string; children: ReactNode; className?: string; carregando?: boolean; atraso?: number; acao?: ReactNode }) {
   return (
-    <Reveal atraso={atraso} className={className}>
-      <Card lift className="h-full">
-        <CardHeader title={title} description={description} action={acao} />
-        <div className="p-5 pt-4">{carregando ? <Skeleton className="h-[240px]" /> : children}</div>
-      </Card>
-    </Reveal>
+    <section data-vg-entra className={cn('vg-painel h-full', className)}>
+      <CardHeader title={title} description={description} action={acao} />
+      <div className="p-5 pt-4">{carregando ? <Skeleton className="h-[240px]" /> : children}</div>
+    </section>
   );
 }
 
@@ -71,7 +75,7 @@ function Destaque({ d, irLista }: { d: DashboardT; irLista: (p: Record<string, s
       initial={{ opacity: 0, y: 16, scale: 0.99 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.6, ease: [0.2, 0.8, 0.2, 1], delay: 0.1 }}
-      className="relative mb-6 overflow-hidden rounded-[20px] border border-line bg-card p-6 shadow-card sm:p-7"
+      className="vg-painel relative mb-6 overflow-hidden p-6 sm:p-7"
     >
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] overflow-hidden" aria-hidden>
         <span className="anim-varrer block h-full w-1/4 bg-gradient-to-r from-transparent via-brand to-transparent" />
@@ -144,34 +148,54 @@ export default function Dashboard() {
   const seriePct = d?.encerradasPorMes.slice(0, mesRef).map((m) => m.pct);
   const serieCad = d?.cadastradasPorMes.map((m) => m.total);
 
+  // Entrada em cascata dos painéis, como no Glassy Dashboard (uma vez, quando os dados chegam).
+  const palco = useRef<HTMLDivElement>(null);
+  const carregado = !!d;
+  useGSAP(
+    () => {
+      if (!carregado || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
+      tl.fromTo(palco.current, { filter: 'blur(5px)', opacity: 0.6 }, { filter: 'blur(0px)', opacity: 1, duration: 0.32, clearProps: 'filter,opacity' }, 0);
+      tl.from('[data-vg-entra]', { y: 18, opacity: 0, stagger: 0.045, duration: 0.5, clearProps: 'transform,opacity' }, 0.035);
+    },
+    { scope: palco, dependencies: [carregado] },
+  );
+
   return (
-    <div>
-      <PageHeader
-        eyebrow={new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
-        title={
-          <>
+    <>
+      {createPortal(
+        <div className="vg-cena" aria-hidden>
+          <i />
+          <i />
+          <i />
+        </div>,
+        document.body,
+      )}
+      <div ref={palco} className="vg-palco">
+      <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-[12px] font-bold uppercase tracking-[0.16em] text-brand">
+            {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
+          </p>
+          <h1 className="vg-titulo mt-2">
             {saudacao()}, {primeiroNome(usuario?.nome ?? '')}{' '}
             <motion.span className="inline-block origin-[70%_70%]" animate={{ rotate: [0, 14, -8, 14, -4, 10, 0] }} transition={{ duration: 1.6, delay: 0.6 }}>
               👋
             </motion.span>
-          </>
-        }
-        subtitle={
-          <>
+          </h1>
+          <p className="mt-2 text-[13px] font-medium text-[var(--vg-muted)]">
             {d?.ultimaImportacao?.data ? <>Dados atualizados em {fmtDataHora(d.ultimaImportacao.data)}</> : 'Nenhuma importação registrada ainda'}
             {!isAdmin && usuario && <> · Suas áreas: {usuario.areas.join(', ') || '—'}</>}
-          </>
-        }
-        actions={
-          <span className="inline-flex items-center gap-2 rounded-full border border-line bg-card px-3.5 py-2 text-[13px] text-muted shadow-sm">
-            <span className="relative flex h-2 w-2">
-              <span className="anim-ping absolute inline-flex h-full w-full rounded-full bg-success" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
-            </span>
-            Sistema online
+          </p>
+        </div>
+        <span className="vg-segmento inline-flex shrink-0 items-center gap-2 self-start rounded-full px-3.5 py-2 text-[12px] font-bold sm:self-auto">
+          <span className="relative flex h-2 w-2">
+            <span className="anim-ping absolute inline-flex h-full w-full rounded-full bg-success" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
           </span>
-        }
-      />
+          Sistema online
+        </span>
+      </header>
 
       {q.isError && !d ? (
         <Card>
@@ -190,10 +214,11 @@ export default function Dashboard() {
               Array.from({ length: 6 }).map((_, i) => <KpiSkeleton key={i} />)
             ) : (
               <>
-                <KpiCard indice={0} label="NCs abertas" numero={k.abertas} icon={<ClipboardList className="h-4 w-4" />} serie={serieCad} hint="cadastros nos últimos 12 meses" onClick={() => irLista({ aba: 'abertas' })} />
-                <KpiCard indice={1} label="Em execução c/ Unigás" numero={k.execucao} icon={<Hammer className="h-4 w-4" />} tom="brand" hint="ação da Unigás" barra={{ valor: k.abertas ? (k.execucao / k.abertas) * 100 : 0 }} onClick={() => irLista({ aba: 'execucao' })} />
-                <KpiCard indice={2} label="Em verificação c/ Comgás" numero={k.verificacao} icon={<Eye className="h-4 w-4" />} tom="info" hint="aguardando a Comgás" barra={{ valor: k.abertas ? (k.verificacao / k.abertas) * 100 : 0, cor: 'bg-info' }} onClick={() => irLista({ aba: 'verificacao' })} />
+                <KpiCard vidro destaque indice={0} label="NCs abertas" numero={k.abertas} icon={<ClipboardList className="h-4 w-4" />} serie={serieCad} hint="cadastros nos últimos 12 meses" onClick={() => irLista({ aba: 'abertas' })} />
+                <KpiCard vidro indice={1} label="Em execução c/ Unigás" numero={k.execucao} icon={<Hammer className="h-4 w-4" />} tom="brand" hint="ação da Unigás" barra={{ valor: k.abertas ? (k.execucao / k.abertas) * 100 : 0 }} onClick={() => irLista({ aba: 'execucao' })} />
+                <KpiCard vidro indice={2} label="Em verificação c/ Comgás" numero={k.verificacao} icon={<Eye className="h-4 w-4" />} tom="info" hint="aguardando a Comgás" barra={{ valor: k.abertas ? (k.verificacao / k.abertas) * 100 : 0, cor: 'bg-info' }} onClick={() => irLista({ aba: 'verificacao' })} />
                 <KpiCard
+                  vidro
                   indice={3}
                   label="Atrasadas"
                   numero={k.atrasadas}
@@ -204,6 +229,7 @@ export default function Dashboard() {
                   onClick={() => irLista({ aba: 'atrasadas' })}
                 />
                 <KpiCard
+                  vidro
                   indice={4}
                   label="% encerradas no prazo"
                   numero={k.pctNoPrazoMes === null ? null : Math.round(k.pctNoPrazoMes)}
@@ -214,7 +240,7 @@ export default function Dashboard() {
                   serie={seriePct}
                   hint={k.variacaoPct === null ? `${k.mesReferenciaRotulo} · ${k.encerradasMes} encerrada(s)` : undefined}
                 />
-                <KpiCard indice={5} label="Média de dias de atraso" numero={k.mediaDiasAtraso} casas={1} icon={<Timer className="h-4 w-4" />} hint="entre as abertas atrasadas" />
+                <KpiCard vidro indice={5} label="Média de dias de atraso" numero={k.mediaDiasAtraso} casas={1} icon={<Timer className="h-4 w-4" />} hint="entre as abertas atrasadas" />
               </>
             )}
           </section>
@@ -255,8 +281,8 @@ export default function Dashboard() {
             </ChartCard>
           </section>
 
-          <Reveal className="mt-4">
-            <Card className="overflow-hidden">
+          <section data-vg-entra className="vg-painel mt-4 overflow-hidden">
+            <div>
               <CardHeader
                 title="Precisam de atenção"
                 description={`NCs abertas ordenadas por dias de atraso · Atenção ≥ ${config?.alertaAtencaoDias ?? 15} dias · Crítico ≥ ${config?.alertaCriticoDias ?? 30} dias`}
@@ -266,7 +292,7 @@ export default function Dashboard() {
                   </Link>
                 }
               />
-              <div className="mt-4">
+              <div className="vg-tabela mt-4 px-2 pb-2">
                 <NcTable
                   itens={d?.atencao ?? []}
                   carregando={!d}
@@ -274,10 +300,11 @@ export default function Dashboard() {
                   vazio={<EmptyState icon={<CheckCircle2 className="h-5 w-5 text-success" />} title="Nenhuma NC atrasada 🎉" description="Todas as NCs abertas estão dentro do prazo." />}
                 />
               </div>
-            </Card>
-          </Reveal>
+            </div>
+          </section>
         </>
       )}
-    </div>
+      </div>
+    </>
   );
 }

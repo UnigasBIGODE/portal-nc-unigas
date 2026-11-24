@@ -352,3 +352,272 @@
 
 /* Lista de opções (Select): sem anel de foco no painel e na busca; o destaque é o vidro da opção */
 .sel-painel:focus-visible, .sel-painel input:focus-visible { outline: none; box-shadow: none; }
+
+/* ==================================================================
+   Vidro "Glassy Dashboard" (adaptado às cores Unigás)
+   Base: glassy-dashboard (21st.dev) — trilhos, palco, painéis,
+   botões de ícone, indicador "pick" e cena de fundo.
+================================================================== */
+:root,
+.light {
+  --vg-ink: #1d1416;
+  --vg-muted: #5d4b4e;
+  --vg-line: rgb(90 20 26 / 11%);
+  --vg-rim: rgb(255 255 255 / 66%);
+  --vg-edge-light: rgb(255 255 255 / 90%);
+  --vg-edge-shade: rgb(90 20 26 / 13%);
+  --vg-gloss: rgb(255 255 255 / 52%);
+  --vg-frame: rgb(255 255 255 / 34%);
+  --vg-rail: rgb(255 255 255 / 58%);
+  --vg-card: rgb(255 255 255 / 56%);
+  --vg-card-light: rgb(255 255 255 / 48%);
+  --vg-raised: rgb(255 255 255 / 92%);
+  --vg-inner: rgb(255 255 255 / 46%);
+  --vg-track: rgb(90 20 26 / 10%);
+  --vg-pick: #ffffff;
+  --vg-pick-ink: #b5040f;
+  --vg-sombra: 90 14 20;
+}
+.dark {
+  --vg-ink: #fbf3f3;
+  --vg-muted: #c9b7b9;
+  --vg-line: rgb(255 225 228 / 11%);
+  --vg-rim: rgb(255 228 230 / 15%);
+  --vg-edge-light: rgb(255 236 238 / 26%);
+  --vg-edge-shade: rgb(0 0 0 / 45%);
+  --vg-gloss: rgb(255 232 234 / 8%);
+  --vg-frame: rgb(26 20 22 / 52%);
+  --vg-rail: rgb(24 19 21 / 66%);
+  --vg-card: rgb(34 27 29 / 60%);
+  --vg-card-light: rgb(110 84 88 / 20%);
+  --vg-raised: rgb(66 54 57 / 85%);
+  --vg-inner: rgb(255 240 241 / 6%);
+  --vg-track: rgb(255 230 232 / 12%);
+  --vg-pick: #fbeff0;
+  --vg-pick-ink: #b5040f;
+  --vg-sombra: 0 0 0;
+}
+
+/* Cena de fundo: manchas desfocadas que o vidro refrata. */
+.vg-cena {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background:
+    radial-gradient(60% 50% at 82% 8%, rgb(227 6 19 / 16%), transparent 70%),
+    radial-gradient(45% 45% at 8% 92%, rgb(255 140 110 / 16%), transparent 70%),
+    radial-gradient(40% 40% at 45% 55%, rgb(255 205 190 / 18%), transparent 72%);
+}
+.dark .vg-cena {
+  background:
+    radial-gradient(60% 50% at 82% 8%, rgb(227 6 19 / 22%), transparent 70%),
+    radial-gradient(45% 45% at 8% 92%, rgb(160 40 30 / 22%), transparent 70%),
+    radial-gradient(40% 40% at 45% 55%, rgb(90 30 34 / 30%), transparent 72%);
+}
+.vg-cena i {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  opacity: 0.55;
+  animation: vg-deriva 22s ease-in-out infinite alternate;
+}
+.vg-cena i:nth-child(1) { width: 34vw; height: 34vw; left: 52%; top: -8%; background: rgb(227 6 19 / 30%); }
+.vg-cena i:nth-child(2) { width: 26vw; height: 26vw; left: 6%; top: 46%; background: rgb(255 128 96 / 32%); animation-duration: 28s; animation-direction: alternate-reverse; }
+.vg-cena i:nth-child(3) { width: 22vw; height: 22vw; left: 70%; top: 58%; background: rgb(255 196 180 / 40%); animation-duration: 25s; }
+.dark .vg-cena i { opacity: 0.35; }
+@keyframes vg-deriva {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(-6vw, 5vh, 0) scale(1.15); }
+}
+
+/* Trilho de vidro (barra do topo, menu lateral). */
+.vg-trilho {
+  border: 1px solid var(--vg-rim);
+  background: linear-gradient(165deg, var(--vg-gloss), transparent 32% 73%, var(--vg-gloss)), var(--vg-rail);
+  box-shadow:
+    inset 1px 1px 1px var(--vg-edge-light),
+    inset -1px -1px 1px var(--vg-edge-shade),
+    inset 0 -2px 5px var(--vg-gloss),
+    0 7px 20px rgb(var(--vg-sombra) / 12%);
+  -webkit-backdrop-filter: blur(15px) saturate(1.35);
+  backdrop-filter: blur(15px) saturate(1.35);
+}
+
+/* Botão de ícone de vidro (sino, menu). */
+.vg-botao {
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--vg-line);
+  background: var(--vg-inner);
+  color: var(--vg-ink);
+  box-shadow: inset 0 1px 0 var(--vg-gloss), inset 1px 1px 1px var(--vg-edge-light), inset -1px -1px 1px var(--vg-edge-shade);
+  transition: background-color 0.25s ease, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease;
+}
+.vg-botao:hover { background: var(--vg-raised); box-shadow: inset 0 1px 0 var(--vg-gloss), 0 4px 14px rgb(var(--vg-sombra) / 14%); }
+.vg-botao:active { transform: scale(0.94); }
+.vg-botao[aria-expanded='true'] { background: var(--vg-raised); }
+
+/* Campo "perguntar" da barra do topo, com o orbe. */
+.vg-perguntar {
+  border: 1px solid var(--vg-line);
+  background: var(--vg-inner);
+  box-shadow: inset 0 1px 0 var(--vg-gloss);
+  color: var(--vg-muted);
+  transition: background-color 0.25s ease;
+}
+.vg-perguntar:hover { background: var(--vg-raised); }
+.vg-orbe {
+  flex: none;
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  background:
+    radial-gradient(ellipse at 32% 24%, #fff7f5 5%, #ffb4a3 25%, transparent 58%),
+    radial-gradient(ellipse at 67% 54%, #ff7a82, #e30613 55%, #6d0510 79%);
+  box-shadow: inset 0 0 0 0.75px rgb(255 245 245 / 75%), inset 0 -2px 5px #9b0410, 0 0 0 3px rgb(227 6 19 / 12%), 0 2px 8px rgb(140 6 16 / 35%);
+  animation: vg-orbe 6s ease-in-out infinite;
+}
+@keyframes vg-orbe {
+  0%, 100% { filter: hue-rotate(0deg); transform: rotate(0deg); }
+  50% { filter: hue-rotate(-12deg); transform: rotate(180deg); }
+}
+.vg-digitar { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; animation: vg-digitar 0.74s steps(26, end) both; }
+@keyframes vg-digitar { from { clip-path: inset(0 100% 0 0); } }
+
+/* Indicador do item ativo ("pick"). */
+.vg-pick {
+  background: var(--vg-pick);
+  box-shadow: inset 0 1px 0 #fff, 0 2px 7px rgb(var(--vg-sombra) / 16%), 0 0 0 1px var(--vg-line);
+}
+.dark .vg-pick { box-shadow: inset 0 1px 0 rgb(255 255 255 / 70%), 0 2px 10px rgb(0 0 0 / 45%); }
+
+/* Dica ao lado do menu recolhido. */
+.vg-dica {
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  translate: 0 -50%;
+  z-index: 60;
+  pointer-events: none;
+  white-space: nowrap;
+  color: var(--vg-ink);
+  background: var(--vg-pick);
+  padding: 6px 10px;
+  border: 1px solid var(--vg-rim);
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 650;
+  box-shadow: 0 3px 10px rgb(var(--vg-sombra) / 18%);
+  opacity: 0;
+  transform: translateX(-4px);
+  transition: opacity 0.15s ease, transform 0.2s ease;
+}
+.group:hover > .vg-dica,
+.group:focus-visible > .vg-dica { opacity: 1; transform: none; }
+
+/* Avatar animado. */
+.vg-avatar {
+  position: relative;
+  isolation: isolate;
+  border-radius: 999px;
+  color: #fff;
+  background: radial-gradient(ellipse at 30% 18%, #ff6b74, transparent 62%), linear-gradient(145deg, #e30613, #8f0410);
+  box-shadow: inset 0 1px 2px rgb(255 220 222 / 60%), inset 0 -2px 5px rgb(90 0 8 / 45%), 0 4px 12px rgb(170 6 18 / 32%);
+  transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease;
+}
+.vg-avatar::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  z-index: -1;
+  border-radius: inherit;
+  background: conic-gradient(from var(--vg-giro, 0deg), #ff8a92, #e30613, #ffd0c4, #ff8a92);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  animation: vg-giro 2.4s linear infinite;
+}
+.vg-avatar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(115deg, transparent 30%, rgb(255 255 255 / 55%) 45%, transparent 60%);
+  background-size: 250% 100%;
+  background-position: 120% 0;
+  animation: vg-brilho 5s ease-in-out 1.2s infinite;
+  pointer-events: none;
+}
+.vg-avatar:hover { transform: scale(1.08) rotate(-4deg); box-shadow: inset 0 1px 2px rgb(255 220 222 / 60%), 0 8px 20px rgb(170 6 18 / 40%); }
+.vg-avatar:hover::before { opacity: 1; }
+@property --vg-giro { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+@keyframes vg-giro { to { --vg-giro: 360deg; } }
+@keyframes vg-brilho { 0%, 70% { background-position: 120% 0; } 100% { background-position: -120% 0; } }
+
+/* Palco e painéis do dashboard. */
+.vg-palco {
+  position: relative;
+  z-index: 1;
+  color: var(--vg-ink);
+  font-family: 'Manrope Variable', Manrope, Inter, system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--vg-rim);
+  border-radius: 34px;
+  background:
+    linear-gradient(148deg, var(--vg-gloss), transparent 19% 77%, color-mix(in srgb, var(--vg-gloss) 48%, transparent)),
+    var(--vg-frame);
+  box-shadow:
+    inset 1px 1px 1px var(--vg-edge-light),
+    inset -1px -1px 1px var(--vg-edge-shade),
+    inset 0 0 7px var(--vg-gloss),
+    0 1px 3px rgb(var(--vg-sombra) / 12%),
+    0 22px 72px rgb(var(--vg-sombra) / 14%);
+  -webkit-backdrop-filter: blur(12px) saturate(1.24);
+  backdrop-filter: blur(12px) saturate(1.24);
+  padding: clamp(18px, 2.15vw, 35px) clamp(14px, 3vw, 46px) clamp(22px, 3vw, 41px);
+}
+.vg-titulo { font-size: clamp(29px, 3.35vw, 49px); font-weight: 760; line-height: 1.03; letter-spacing: -0.055em; }
+.vg-painel {
+  min-width: 0;
+  border: 1px solid var(--vg-rim);
+  border-radius: 20px;
+  background: linear-gradient(144deg, var(--vg-card-light), transparent 66%), var(--vg-card);
+  box-shadow: inset 0 1px 1px var(--vg-edge-light), inset 0 -1px 1px var(--vg-edge-shade), 0 6px 18px rgb(var(--vg-sombra) / 8%);
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+.vg-painel:hover { box-shadow: inset 0 1px 1px var(--vg-edge-light), inset 0 -1px 1px var(--vg-edge-shade), 0 12px 30px rgb(var(--vg-sombra) / 13%); }
+.vg-destaque {
+  --vg-muted: #ffe3e5;
+  color: #fff;
+  border: 1px solid rgb(255 205 208 / 55%);
+  border-radius: 20px;
+  background: radial-gradient(ellipse at 5% -20%, #ff4a55, transparent 68%), linear-gradient(145deg, #d10a17, #7a0610);
+  box-shadow: inset 0 1px 2px rgb(255 220 222 / 45%), 0 6px 14px rgb(120 6 16 / 20%);
+}
+.vg-chip {
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--vg-inner);
+  box-shadow: inset 0 1px 0 var(--vg-gloss);
+}
+.vg-destaque .vg-chip { background: rgb(255 240 241 / 16%); color: #fff; }
+.vg-segmento {
+  border: 1px solid var(--vg-rim);
+  background: var(--vg-inner);
+  box-shadow: inset 0 1px 0 var(--vg-gloss);
+}
+.vg-tabela thead tr { background: transparent !important; border: 0 !important; }
+.vg-tabela thead th { background: var(--vg-inner); color: var(--vg-muted); }
+.vg-tabela thead th:first-child { border-radius: 10px 0 0 10px; }
+.vg-tabela thead th:last-child { border-radius: 0 10px 10px 0; }
+.vg-palco .vg-painel :is(h2, h3) { letter-spacing: -0.024em; }
+
+@media (prefers-reduced-motion: reduce) {
+  .vg-cena i, .vg-orbe, .vg-avatar::before, .vg-avatar::after, .vg-digitar { animation: none !important; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .vg-trilho, .vg-palco, .vg-painel { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgb(var(--card)); }
+}

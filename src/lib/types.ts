@@ -52,6 +52,8 @@ export interface ConfigPublica {
   criticidadeCriticaMin: number;
   alertaPrazoDias: number;
   emailSuporte: string;
+  /** Assistente de IA configurado e ativo. */
+  iaDisponivel?: boolean;
 }
 
 export interface UltimaImportacao {

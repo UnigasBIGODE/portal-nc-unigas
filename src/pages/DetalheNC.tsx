@@ -1,3 +1,4 @@
+import { useAssistente } from '@/components/Assistente';
 import { createPortal } from 'react-dom';
 import { useRef, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
@@ -6,7 +7,7 @@ import { AnimatePresence, motion, useMotionValueEvent, useScroll } from 'framer-
 import { useToast } from '@/components/Toast';
 import { SucessoAnimado } from '@/components/Celebracao';
 import { comprimirImagem, nomeFotoCamera } from '@/lib/imagem';
-import { ArrowLeft, ArrowRight, Camera, CalendarClock, Check, Flag, CheckCircle2, Download, Eye, FileText, ImagePlus, Loader2, MessageSquare, Paperclip, Pencil, RotateCcw, Send, SendHorizontal, Trash2, Undo2, Upload, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Camera, CalendarClock, Check, Flag, CheckCircle2, Download, Eye, FileText, ImagePlus, Loader2, MessageSquare, Paperclip, Pencil, RotateCcw, Send, SendHorizontal, Sparkles, Trash2, Undo2, Upload, X } from 'lucide-react';
 import { api, arquivoParaBase64, baixarBase64, mensagemErro } from '@/lib/api';
 import type { DetalheNC as DetalheT, Etapa, NC } from '@/lib/types';
 import { cn, fmtData, fmtDataHora, hojeISO, iniciais } from '@/lib/utils';
@@ -955,6 +956,7 @@ function FluxoEtapa({ nc, onFeito }: { nc: NC; onFeito: (d: DetalheT, acao: Acao
 }
 
 export default function DetalheNC() {
+  const ia = useAssistente();
   const { id } = useParams();
   useTitulo(`NC ${id}`);
   const qc = useQueryClient();
@@ -1138,6 +1140,18 @@ export default function DetalheNC() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {ia.disponivel && (
+              <>
+                <Button variant="secondary" onClick={() => ia.pedirNC('resumo', nc.nc_id)} title="Resumo da NC feito pela IA">
+                  <Sparkles className="h-4 w-4 text-brand" /> Resumir
+                </Button>
+                {nc.aberta && (
+                  <Button variant="secondary" onClick={() => ia.pedirNC('plano', nc.nc_id)} title="Sugestão de plano de ação feita pela IA">
+                    <Sparkles className="h-4 w-4 text-brand" /> Plano de ação
+                  </Button>
+                )}
+              </>
+            )}
             {podeEnviarVerificacao && (
               <EnviarVerificacao
                 nc={nc}

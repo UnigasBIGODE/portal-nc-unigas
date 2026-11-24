@@ -13,6 +13,7 @@ import { useAlertas } from '@/hooks/queries';
 import { totalPendencias, usePendencias } from '@/pages/admin/Pendencias';
 import { Logo } from '../Logo';
 import { Avatar } from '../Avatar';
+import { AssistenteProvider } from '../Assistente';
 import { AlertaBadge } from '../StatusBadges';
 import { Badge, Button, Dialog, Skeleton } from '../ui';
 import { cn } from '@/lib/utils';
@@ -616,6 +617,7 @@ export function AppLayout() {
   }, [recolhido]);
 
   return (
+    <AssistenteProvider>
     <div className="min-h-screen" style={{ ['--menu' as string]: `${recolhido ? LARGURA.recolhido : LARGURA.aberto}px` }}>
       <BarraProgresso />
       <a href="#conteudo" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-full focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-fg">
@@ -639,5 +641,6 @@ export function AppLayout() {
       <CommandPalette aberto={busca} fechar={() => setBusca(false)} />
       <VoltarAoTopo />
     </div>
+    </AssistenteProvider>
   );
 }

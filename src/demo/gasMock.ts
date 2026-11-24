@@ -21,6 +21,42 @@ function carregar() {
 }
 
 export const estado = carregar();
+// Demonstração: assistente de IA já "configurado" (as respostas são simuladas, sem chamar o Google).
+if (!estado.props.GEMINI_API_KEY) estado.props.GEMINI_API_KEY = 'demo-sem-chave-real-0000000000';
+
+/** Gemini simulado: monta uma resposta a partir dos próprios dados enviados no pedido. */
+function iaDemo(url: string, opts: { payload: string }) {
+  if (!/generativelanguage/.test(url)) throw new Error('Indisponível na demonstração');
+  const corpo = JSON.parse(opts.payload) as { contents: { role: string; parts: { text: string }[] }[] };
+  const primeiro = corpo.contents[0].parts[0].text;
+  const ultimo = corpo.contents[corpo.contents.length - 1].parts[0].text;
+  let texto: string;
+  if (primeiro.startsWith('DADOS DA NC:')) {
+    const campo = (r: RegExp) => (primeiro.match(r) || [])[1]?.trim() || '—';
+    const id = campo(/^NC (\d+)/m);
+    const titulo = campo(/Título\/endereço: (.*)/);
+    const etapa = campo(/Etapa: ([^|]+)/);
+    const prazo = campo(/Prazo: ([^|]+)/);
+    const status = campo(/Status: ([^\n]+)/);
+    const desc = campo(/Descrição: (.*)/);
+    texto = /plano de ação/i.test(ultimo)
+      ? `**Sugestão de plano de ação — NC ${id}** _(demonstração)_\n\n1. Vistoriar o local (${titulo}) e registrar fotos do problema — Encarregado Unigás, em até 2 dias.\n2. Corrigir a causa apontada: ${desc.slice(0, 120)} — Equipe de campo, em até 5 dias.\n3. Registrar evidências no portal e enviar para verificação da Comgás — Responsável da área, logo após a correção.\n4. Alinhar com o verificador a data da vistoria — Ponto focal, antes do prazo (${prazo}).\n\nComo evitar que se repita: reforçar o procedimento com a equipe e incluir este item no checklist de encerramento.`
+      : `**Resumo da NC ${id}** _(demonstração)_\n\n- **Problema:** ${desc.slice(0, 160)}\n- **Local:** ${titulo}\n- **Situação:** etapa ${etapa}, prazo ${prazo} — ${status}\n- **Próximo passo:** concluir a ação corretiva e enviar para verificação da Comgás.`;
+  } else {
+    const total = (primeiro.match(/TOTAL visível para o usuário: ([^\n]+)/) || [])[1] || '';
+    const areas = ((primeiro.split('RESUMO POR ÁREA:\n')[1] || '').split('\n\n')[0] || '').split('\n').filter(Boolean);
+    const linhas = ((primeiro.split('Resp. resolução\n')[1] || '').split('\n\n')[0] || '').split('\n').filter(Boolean);
+    const atrasadas = linhas.filter((l) => l.includes('| Atrasado |')).slice(0, 5).map((l) => {
+      const c = l.split(' | ');
+      return `- NC ${c[0]} · ${c[1]} · ${c[11]} dias de atraso`;
+    });
+    texto = `_(Demonstração: aqui o Gemini responderia de verdade. Abaixo, um exemplo com os seus dados.)_\n\nVocê perguntou: **${ultimo.slice(0, 140)}**\n\n- ${total}\n${areas.slice(0, 4).map((a) => '- ' + a).join('\n')}\n\n**NCs mais atrasadas:**\n${atrasadas.join('\n') || '- Nenhuma NC atrasada.'}`;
+  }
+  return {
+    getResponseCode: () => 200,
+    getContentText: () => JSON.stringify({ candidates: [{ content: { parts: [{ text: texto }] }, finishReason: 'STOP' }] }),
+  };
+}
 export const emails: { to: string; subject: string; link?: string; data: Date }[] = [];
 
 export function salvarEstado() {
@@ -201,7 +237,7 @@ export const globais = {
     WeekDay: { MONDAY: 'MONDAY' },
     newTrigger: () => { const b = { timeBased: () => b, everyDays: () => b, atHour: () => b, inTimezone: () => b, onWeekDay: () => b, create: () => ({}) }; return b; },
   },
-  UrlFetchApp: { fetch: () => { throw new Error('Indisponível na demonstração'); } },
+  UrlFetchApp: { fetch: (url: string, opts: { payload: string }) => iaDemo(url, opts) },
 };
 
 export const estaVazio = () => !estado.sheets.NC;

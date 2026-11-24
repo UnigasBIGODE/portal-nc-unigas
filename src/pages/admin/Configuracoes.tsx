@@ -5,14 +5,19 @@ import type { ConfigPublica } from '@/lib/types';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/components/Toast';
 import { useTitulo } from '@/hooks/queries';
-import { Aviso, Button, Card, CardHeader, ErrorState, Field, Input, PageHeader, Skeleton } from '@/components/ui';
+import { Aviso, Badge, Button, Card, CardHeader, ErrorState, Field, Input, PageHeader, Select, Skeleton } from '@/components/ui';
+import { CheckCircle2, Trash2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+
+const semAcento = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 
 export default function Configuracoes() {
   useTitulo('Configurações');
   const qc = useQueryClient();
   const toast = useToast();
   const { setConfig } = useAuth();
-  const q = useQuery({ queryKey: ['config'], queryFn: () => api<{ valores: Record<string, string> }>('config.obter') });
+  const q = useQuery({ queryKey: ['config'], queryFn: () => api<{ valores: Record<string, string>; iaChaveConfigurada: boolean }>('config.obter') });
+  const [iaChave, setIaChave] = useState('');
   const [v, setV] = useState<Record<string, string>>({});
   const [msg, setMsg] = useState<{ tom: 'success' | 'danger'; t: string } | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -26,8 +31,9 @@ export default function Configuracoes() {
     setSalvando(true);
     setMsg(null);
     try {
-      const r = await api<{ publica: ConfigPublica }>('config.salvar', { valores: v });
+      const r = await api<{ publica: ConfigPublica }>('config.salvar', { valores: v, iaChave: iaChave.trim() || undefined });
       setConfig(r.publica);
+      setIaChave('');
       qc.invalidateQueries();
       toast({ tipo: 'sucesso', titulo: 'Configurações salvas', descricao: 'Os indicadores foram recalculados.' });
       setMsg(null);
@@ -75,6 +81,60 @@ export default function Configuracoes() {
               </Field>
             ))}
           </div>
+        </Card>
+        <Card>
+          <CardHeader
+            title={
+              <span className="inline-flex items-center gap-2">
+                <span className="vg-orbe !h-6 !w-6" aria-hidden /> Assistente de IA (Gemini)
+              </span>
+            }
+            description="Chat “Pergunte à IA” e os botões Resumir / Plano de ação nas NCs."
+            action={
+              q.data.iaChaveConfigurada ? (
+                <Badge tom="success">
+                  <CheckCircle2 className="h-3.5 w-3.5" /> Chave cadastrada
+                </Badge>
+              ) : (
+                <Badge tom="warning">Sem chave</Badge>
+              )
+            }
+          />
+          <div className="grid gap-4 p-5 pt-4 sm:grid-cols-2">
+            <Field
+              label="Chave da API do Gemini"
+              hint={
+                <>
+                  Crie grátis em{' '}
+                  <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" className="font-medium text-brand hover:underline">
+                    aistudio.google.com/apikey
+                  </a>
+                  . Fica guardada só no Apps Script e nunca aparece no site.
+                </>
+              }
+            >
+              <Input type="password" autoComplete="off" placeholder={q.data.iaChaveConfigurada ? '•••••••• (cole outra para trocar)' : 'Cole a chave aqui (começa com AIza…)'} value={iaChave} onChange={(e) => setIaChave(e.target.value)} />
+            </Field>
+            <Field label="Assistente ativo" hint="Desative para esconder o assistente de todos os usuários.">
+              <Select value={semAcento(v.ia_ativa ?? 'sim') === 'nao' ? 'nao' : 'sim'} onChange={(e) => setV({ ...v, ia_ativa: e.target.value })}>
+                <option value="sim">Sim</option>
+                <option value="nao">Não</option>
+              </Select>
+            </Field>
+            <Field label="Modelo do Gemini" hint="Padrão: gemini-3.5-flash-lite. Se o Google desativar, o sistema tenta outro modelo sozinho.">
+              <Input {...campo('ia_modelo')} placeholder="gemini-3.5-flash-lite" />
+            </Field>
+            {q.data.iaChaveConfigurada && (
+              <div className="flex items-end">
+                <Button variant="ghost" onClick={() => setIaChave('-')} className={cn(iaChave === '-' && 'text-danger')}>
+                  <Trash2 className="h-4 w-4" /> {iaChave === '-' ? 'A chave será removida ao salvar' : 'Remover chave'}
+                </Button>
+              </div>
+            )}
+          </div>
+          <p className="px-5 pb-5 text-[12px] text-muted">
+            Na faixa gratuita, o Google pode usar as perguntas e os dados enviados para melhorar os produtos dele. Cada usuário pode fazer até 60 perguntas a cada 6 horas.
+          </p>
         </Card>
         <Card>
           <CardHeader title="Sistema" />

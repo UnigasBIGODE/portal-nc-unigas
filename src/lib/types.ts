@@ -171,6 +171,20 @@ export interface Alertas { itens: Alerta[]; total: number; criticos: number; ate
 
 export interface OpcoesFiltro { areas: string[]; gerencias: string[]; regioes: string[]; verificadores: string[]; anos: number[] }
 
+/** NC lida na prévia da importação, para escolher/alterar o setor antes de gravar. */
+export interface SetorImport {
+  nc_id: number;
+  titulo: string;
+  nova: boolean;
+  /** setor que a NC já tem no portal ('' = a classificar) */
+  atual: string;
+  /** setor que veio na planilha (se tinha a coluna) */
+  arquivo: string;
+  /** sugestão automática (aprendida com as NCs já classificadas) */
+  sugestao: string;
+  confianca: number;
+}
+
 export interface ResultadoImportacao {
   novas: number;
   atualizadas: number;
@@ -185,6 +199,9 @@ export interface ResultadoImportacao {
   totalProrrogacoes?: number;
   novasIds?: number[];
   ids?: number[];
+  setores?: SetorImport[];
+  foraEscopo?: number;
+  foraEscopoIds?: { nc_id: number; resp: string; linha: number }[];
   emails?: number;
   finalizadas?: number;
   finalizadasSemData?: number;

@@ -5,14 +5,15 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { EtapaBadge } from '@/components/StatusBadges';
 import { api, mensagemErro } from '@/lib/api';
-import type { Etapa, ProrrogacaoImport, ResultadoImportacao, RetomadaImport } from '@/lib/types';
+import type { Etapa, ProrrogacaoImport, ResultadoImportacao, RetomadaImport, SetorImport } from '@/lib/types';
 import { cn, fmtData, fmtDataHora, hojeISO } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/components/Toast';
-import { useTitulo } from '@/hooks/queries';
+import { useOpcoesFiltro, useTitulo } from '@/hooks/queries';
 import { NumeroAnimado } from '@/components/KpiCard';
 import { SucessoAnimado } from '@/components/Celebracao';
-import { Aviso, Badge, Button, Card, CardHeader, Dialog, EmptyState, Input, PageHeader, Skeleton, Textarea } from '@/components/ui';
+import { Aviso, Badge, Button, Card, CardHeader, Dialog, EmptyState, Input, PageHeader, Select, Skeleton, Textarea } from '@/components/ui';
+import { LumaAvatar } from '@/components/Assistente';
 
 const LOTE = 300;
 type Linha = Record<string, unknown>;
@@ -22,9 +23,37 @@ async function lerPlanilha(arquivo: File): Promise<{ linhas: Linha[]; aba: strin
   // cellDates: false → as datas vão como número serial do Excel e o servidor converte
   // no fuso de Brasília (evita deslocamentos de fuso do navegador).
   const wb = XLSX.read(await arquivo.arrayBuffer(), { cellDates: false });
-  const aba = wb.SheetNames.find((n) => n.trim().toUpperCase() === 'NC') ?? wb.SheetNames[0];
-  const linhas = XLSX.utils.sheet_to_json<Linha>(wb.Sheets[aba], { defval: '', raw: true });
-  return { linhas: linhas.filter((l) => Object.values(l).some((v) => v !== '' && v !== null)), aba };
+  // Lê TODAS as abas que tenham a coluna "NC ID" (ex.: Execução + Verificação), achando o
+  // cabeçalho mesmo que o arquivo tenha título ou linhas em branco antes dele.
+  const ehNcId = (v: unknown) => /^(n\.?\s*c\.?\s*id|id\s*n\.?\s*c\.?|n[ºo°]?\s*(da\s*)?nc)$/i.test(String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim());
+  const linhas: Linha[] = [];
+  const abas: string[] = [];
+  for (const nome of wb.SheetNames) {
+    const ws = wb.Sheets[nome];
+    const matriz = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '', raw: true, blankrows: false });
+    const lin = matriz.slice(0, 25).findIndex((r) => r.some(ehNcId));
+    if (lin < 0) continue;
+    const doc = XLSX.utils.sheet_to_json<Linha>(ws, { defval: '', raw: true, range: lin });
+    linhas.push(...doc.filter((l) => Object.values(l).some((v) => v !== '' && v !== null)));
+    abas.push(nome);
+  }
+  if (!abas.length) {
+    // nenhuma aba com "NC ID": mantém o comportamento antigo (aba NC ou a primeira) para o servidor apontar o erro
+    const aba = wb.SheetNames.find((n) => n.trim().toUpperCase() === 'NC') ?? wb.SheetNames[0];
+    const l = XLSX.utils.sheet_to_json<Linha>(wb.Sheets[aba], { defval: '', raw: true });
+    return { linhas: l.filter((x) => Object.values(x).some((v) => v !== '' && v !== null)), aba };
+  }
+  return { linhas, aba: abas.join(' + ') };
+}
+
+/** A mesma NC pode vir nos dois arquivos: junta numa linha só (vale o setor que vier preenchido). */
+function juntarSetores(a: SetorImport[], b: SetorImport[]): SetorImport[] {
+  const m = new Map<number, SetorImport>();
+  for (const x of [...a, ...b]) {
+    const y = m.get(x.nc_id);
+    m.set(x.nc_id, y ? { ...y, titulo: y.titulo || x.titulo, arquivo: y.arquivo || x.arquivo, sugestao: y.sugestao || x.sugestao, confianca: Math.max(y.confianca, x.confianca) } : x);
+  }
+  return [...m.values()];
 }
 
 function somar(a: ResultadoImportacao, b: ResultadoImportacao): ResultadoImportacao {
@@ -42,6 +71,9 @@ function somar(a: ResultadoImportacao, b: ResultadoImportacao): ResultadoImporta
     totalProrrogacoes: (a.totalProrrogacoes ?? 0) + (b.totalProrrogacoes ?? 0),
     novasIds: [...(a.novasIds ?? []), ...(b.novasIds ?? [])],
     ids: [...(a.ids ?? []), ...(b.ids ?? [])],
+    setores: juntarSetores(a.setores ?? [], b.setores ?? []),
+    foraEscopo: (a.foraEscopo ?? 0) + (b.foraEscopo ?? 0),
+    foraEscopoIds: [...(a.foraEscopoIds ?? []), ...(b.foraEscopoIds ?? [])],
   };
 }
 const VAZIO: ResultadoImportacao = { novas: 0, atualizadas: 0, semAlteracao: 0, totalErros: 0, totalAvisos: 0, erros: [], avisos: [], retomadas: [], totalRetomadas: 0, prorrogacoes: [], totalProrrogacoes: 0, novasIds: [] };
@@ -378,7 +410,9 @@ function Contagens({ r }: { r: ResultadoImportacao }) {
     { rot: 'Sem alteração', v: r.semAlteracao, cls: 'text-muted' },
     { rot: 'Com erro (ignoradas)', v: r.totalErros, cls: r.totalErros ? 'text-danger' : 'text-muted' },
   ];
+  const fora = r.foraEscopo ?? 0;
   return (
+    <>
     <div className="stagger grid grid-cols-2 gap-3 sm:grid-cols-4">
       {it.map((i) => (
         <div key={i.rot} className="rounded-2xl bg-elevated p-4">
@@ -389,6 +423,14 @@ function Contagens({ r }: { r: ResultadoImportacao }) {
         </div>
       ))}
     </div>
+    {fora > 0 && (
+      <p className="mt-3 rounded-xl bg-elevated px-4 py-2.5 text-[13px] text-muted" title={(r.foraEscopoIds ?? []).map((x) => `NC ${x.nc_id} · ${x.resp}`).join('\n')}>
+        <b className="text-fg">{fora}</b> NC{fora > 1 ? 's novas não serão importadas' : ' nova não será importada'}: a Unigás não é a responsável pela resolução (só está em cópia).{' '}
+        {(r.foraEscopoIds ?? []).slice(0, 6).map((x) => x.nc_id).join(', ')}
+        {fora > 6 ? '…' : ''}
+      </p>
+    )}
+    </>
   );
 }
 
@@ -425,6 +467,89 @@ function Problemas({ r }: { r: ResultadoImportacao }) {
   );
 }
 
+/** Setor das NCs lidas: preencher as novas/sem setor e, se quiser, alterar as já classificadas. */
+function SetoresImportacao({ itens, escolhas, mudar }: { itens: SetorImport[]; escolhas: Record<number, string>; mudar: (m: Record<number, string>) => void }) {
+  const { data: op } = useOpcoesFiltro();
+  const areas = (op?.areas ?? []).filter((a) => a !== 'A classificar');
+  const [todas, setTodas] = useState(false);
+  const [emMassa, setEmMassa] = useState('');
+  const semSetor = itens.filter((s) => !s.atual);
+  const classificadas = itens.filter((s) => s.atual);
+  const lista = todas ? [...semSetor, ...classificadas] : semSetor;
+  const comSugestao = semSetor.filter((s) => s.sugestao);
+  const faltando = semSetor.filter((s) => !escolhas[s.nc_id]).length;
+  if (!itens.length) return null;
+  const valorDe = (s: SetorImport) => escolhas[s.nc_id] ?? s.atual;
+  const origem = (s: SetorImport) => {
+    const v = valorDe(s);
+    if (!v) return null;
+    if (s.atual && v === s.atual) return <span className="text-[11px] text-muted">atual</span>;
+    if (s.sugestao && v === s.sugestao && v !== s.arquivo)
+      return (
+        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-brand" title="Sugerido pela LUMA com base nas NCs já classificadas">
+          <LumaAvatar className="h-4 w-4" /> sugestão {Math.round(s.confianca * 100)}%
+        </span>
+      );
+    if (s.arquivo && v === s.arquivo) return <span className="text-[11px] text-muted">da planilha</span>;
+    return <span className="text-[11px] font-medium text-fg">escolhido</span>;
+  };
+  return (
+    <div className="mt-5 overflow-hidden rounded-2xl border border-line">
+      <div className="flex flex-wrap items-center gap-3 border-b border-line bg-elevated/60 px-4 py-3">
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold">Setor das NCs</p>
+          <p className="text-[12px] text-muted">
+            {semSetor.length
+              ? `${semSetor.length} NC(s) sem setor${comSugestao.length ? ` · ${comSugestao.length} com sugestão automática já preenchida` : ''}${faltando ? ` · ${faltando} ficarão "A classificar"` : ''}.`
+              : 'Todas as NCs do arquivo já têm setor.'}{' '}
+            Você pode alterar qualquer uma antes de confirmar.
+          </p>
+        </div>
+        {semSetor.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Select className="h-8 w-44 rounded-full text-[12px]" value={emMassa} onChange={(e) => setEmMassa(e.target.value)} aria-label="Setor para todas sem setor">
+              <option value="">Definir as sem setor…</option>
+              {areas.map((a) => <option key={a}>{a}</option>)}
+            </Select>
+            <Button size="sm" variant="secondary" disabled={!emMassa} onClick={() => { const m = { ...escolhas }; semSetor.forEach((s) => (m[s.nc_id] = emMassa)); mudar(m); }}>
+              Aplicar
+            </Button>
+            {comSugestao.length > 0 && (
+              <Button size="sm" variant="ghost" onClick={() => { const m = { ...escolhas }; comSugestao.forEach((s) => (m[s.nc_id] = s.sugestao)); mudar(m); }}>
+                Usar sugestões
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+      <ul className="max-h-[420px] divide-y divide-line/60 overflow-y-auto">
+        {lista.map((s) => (
+          <li key={s.nc_id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2.5">
+            <span className="tabular w-[72px] shrink-0 text-[13px] font-semibold">NC {s.nc_id}</span>
+            {s.nova && <Badge tom="success">nova</Badge>}
+            <span className="min-w-0 flex-1 truncate text-[13px]" title={s.titulo}>{s.titulo || 'Sem título'}</span>
+            <span className="w-[130px] text-right">{origem(s)}</span>
+            <Select
+              className={cn('h-8 w-48 rounded-full text-[12px]', !valorDe(s) && 'border-warning/60')}
+              value={valorDe(s)}
+              onChange={(e) => mudar({ ...escolhas, [s.nc_id]: e.target.value })}
+              aria-label={`Setor da NC ${s.nc_id}`}
+            >
+              <option value="">A classificar</option>
+              {areas.map((a) => <option key={a}>{a}</option>)}
+            </Select>
+          </li>
+        ))}
+      </ul>
+      {classificadas.length > 0 && (
+        <button type="button" onClick={() => setTodas((v) => !v)} className="w-full border-t border-line px-4 py-2.5 text-left text-[12px] font-medium text-brand hover:bg-elevated/60">
+          {todas ? 'Mostrar só as sem setor' : `Alterar também as ${classificadas.length} que já têm setor`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function Importar() {
   useTitulo('Importar dados');
   const qc = useQueryClient();
@@ -449,6 +574,7 @@ export default function Importar() {
   const [confirmarEntrada, setConfirmarEntrada] = useState(false);
   const [reprocessando, setReprocessando] = useState(false);
   const [decisoes, setDecisoes] = useState<Record<number, Decisao>>({});
+  const [setores, setSetores] = useState<Record<number, string>>({});
   const [notificar, setNotificar] = useState(true);
   const [notificarEntrada, setNotificarEntrada] = useState(true);
   const mudarDecisao = (id: number, d: Partial<Decisao>) =>
@@ -491,6 +617,12 @@ export default function Importar() {
         }
       }
       setDecisoes({});
+      // setor inicial: o da planilha; sem ele, a sugestão automática (NCs que já têm setor ficam como estão)
+      const ini: Record<number, string> = {};
+      (acc.setores ?? []).forEach((x) => {
+        if (!x.atual && (x.arquivo || x.sugestao)) ini[x.nc_id] = x.arquivo || x.sugestao;
+      });
+      setSetores(ini);
       setNotificar(true);
       setDecAusentes({});
       setAusentes(null);
@@ -542,13 +674,19 @@ export default function Importar() {
         if (d?.acao === 'manter') manter[r.nc_id] = true;
         else motivos[r.nc_id] = d?.motivo.trim() ?? '';
       }
+      // só vai o que muda o setor atual da NC
+      const areasEscolhidas: Record<number, string> = {};
+      (previa?.setores ?? []).forEach((x) => {
+        const v = setores[x.nc_id];
+        if (v && v !== x.atual) areasEscolhidas[x.nc_id] = v;
+      });
       let acc = VAZIO;
       const total = partes.reduce((t, p) => t + Math.ceil(p.linhas.length / LOTE), 0) + (aFinalizar.length ? 1 : 0);
       let feitos = 0;
       for (const p of partes) {
         const ls = lotes(p.linhas);
         for (let i = 0; i < ls.length; i++) {
-          acc = somar(acc, await api<ResultadoImportacao>('importar', { etapa: 'lote', id, linhas: ls[i], linhaInicial: i * LOTE + 2, motivos, manter }));
+          acc = somar(acc, await api<ResultadoImportacao>('importar', { etapa: 'lote', id, linhas: ls[i], linhaInicial: i * LOTE + 2, motivos, manter, areas: areasEscolhidas }));
           setProgresso(Math.round((++feitos / total) * 100));
         }
       }
@@ -681,6 +819,7 @@ export default function Importar() {
             <Problemas r={previa} />
             {(previa.prorrogacoes?.length ?? 0) > 0 && <ProrrogacoesRespondidas itens={previa.prorrogacoes ?? []} />}
             {retomadas.length > 0 && <Retomadas itens={retomadas} decisoes={decisoes} mudar={mudarDecisao} />}
+            <SetoresImportacao itens={previa.setores ?? []} escolhas={setores} mudar={setSetores} />
             <label className={cn('mt-5 flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition-colors', conferir ? 'border-success/40 bg-success/[0.04]' : 'border-line')}>
               <input type="checkbox" checked={conferir} onChange={(e) => alternarConferir(e.target.checked)} className="mt-1 h-4 w-4 accent-[#16A34A]" />
               <span className="flex-1">
@@ -699,7 +838,7 @@ export default function Importar() {
             </AnimatePresence>
             <AvisarPorEmail ativo={notificar} mudar={setNotificar} r={previa} />
             <p className="mt-4 text-[13px] text-muted">
-              Áreas já classificadas e planos de ação preenchidos no portal são preservados. Comentários e anexos não são afetados. Linhas com erro são ignoradas.
+              Setores já classificados (a não ser que você altere acima) e planos de ação preenchidos no portal são preservados. Comentários e anexos não são afetados. Linhas com erro são ignoradas.
             </p>
             <div className="mt-5 flex flex-wrap justify-end gap-2">
               <Button variant="secondary" onClick={reiniciar}>

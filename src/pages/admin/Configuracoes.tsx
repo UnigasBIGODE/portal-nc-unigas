@@ -71,6 +71,9 @@ export default function Configuracoes() {
             <Field label="Meta de % encerradas no prazo" hint="Usada no relatório mensal">
               <Input type="number" min={0} max={100} {...campo('meta_pct_no_prazo')} />
             </Field>
+            <Field label="Importar só NCs com Resp. Resolução contendo" hint="NCs novas de outro responsável (Unigás só em cópia) são ignoradas. Vazio = importa todas.">
+              <Input {...campo('filtro_resp_resolucao')} placeholder="unigas" />
+            </Field>
           </div>
         </Card>
         <Card>

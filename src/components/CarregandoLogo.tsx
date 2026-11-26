@@ -2,27 +2,21 @@ import { useEffect, useState } from 'react';
 import { useTheme } from '@/context/ThemeContext';
 import { GlassIconReveal } from '@/components/ui/liquid-glass-logo-reveal';
 import { cn } from '@/lib/utils';
-import { useModoLeve } from '@/lib/desempenho';
 
 /** Cores do fundo do portal (iguais a --bg em index.css): o canvas pinta o próprio fundo. */
 const FUNDO = { light: '#F5F6F8', dark: '#0B0B0D' } as const;
 
-/** Velocidade do efeito nas telas de carregamento (1 = original, ~3,5 s). */
-const VELOCIDADE = 1.3;
+/** Velocidade do efeito nas telas de carregamento (1 = igual ao original do prompt). */
+const VELOCIDADE = 1;
 /** Tempo até a logo terminar de aparecer, em ms (present + 1,1 s de assentamento, na velocidade acima). */
 export const DURACAO_REVELACAO = Math.round(((2.4 + 1.1) / VELOCIDADE) * 1000);
 
 /** Logo da Unigás surgindo de uma gota de vidro líquido. */
 export function LogoVidro({ className }: { className?: string }) {
   const { tema } = useTheme();
-  const leve = useModoLeve();
   const escuro = tema === 'dark';
-  if (leve)
-    return (
-      <div className={cn('grid place-items-center bg-bg', className)}>
-        <img src={escuro ? './logo-dark.png' : './logo-light.png'} alt="Unigás" className="w-[min(220px,50%)] animate-pulse" />
-      </div>
-    );
+  // Sempre o efeito do prompt (mesmo no modo leve): é um único passe de WebGL e só roda
+  // enquanto a tela de carregamento está aberta. Sem WebGL, o próprio componente mostra a logo.
   return (
     <GlassIconReveal
       logo={escuro ? './logo-dark.png' : './logo-light.png'}
@@ -33,12 +27,10 @@ export function LogoVidro({ className }: { className?: string }) {
       iconPlate={false}
       originalColors
       logoColor="#E30613"
-      tileSize={280}
       logoScale={0.6}
-      finalScale={0.95}
+      finalScale={0.8}
       speed={VELOCIDADE}
-      hold={0.6}
-      tuning={{ startZoom: 1.9, sheen: 1 }}
+      tuning={{ startZoom: 2.3 }}
       className={cn('cursor-default', className)}
     />
   );
@@ -75,7 +67,7 @@ export function CarregandoPagina() {
 export function AberturaPortal() {
   const [fase, setFase] = useState<'mostrando' | 'saindo' | 'fim'>(() => {
     try {
-      return sessionStorage.getItem('unigas_abertura') || document.documentElement.classList.contains('leve') ? 'fim' : 'mostrando';
+      return sessionStorage.getItem('unigas_abertura') ? 'fim' : 'mostrando';
     } catch {
       return 'mostrando';
     }

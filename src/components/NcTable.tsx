@@ -1,5 +1,7 @@
 import { useMemo, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { preCarregarNC } from '@/lib/preCarregarNC';
 import { createColumnHelper, flexRender, getCoreRowModel, useReactTable, type ColumnDef, type SortingState } from '@tanstack/react-table';
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, Inbox } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -70,6 +72,7 @@ export function NcTable({
   selecao?: (nc: NC) => ReactNode;
   vazio?: ReactNode;
 }) {
+  const qc = useQueryClient();
   const navigate = useNavigate();
   const columns = useMemo(() => {
     const todas = todasColunas(selecao);
@@ -139,6 +142,9 @@ export function NcTable({
                   navigate(`/ncs/${r.original.nc_id}`);
                 }}
                 onKeyDown={(e) => e.key === 'Enter' && navigate(`/ncs/${r.original.nc_id}`)}
+                onMouseEnter={() => preCarregarNC(qc, r.original.nc_id)}
+                onFocus={() => preCarregarNC(qc, r.original.nc_id)}
+                onTouchStart={() => preCarregarNC(qc, r.original.nc_id)}
                 className="group/row cursor-pointer border-b border-line/60 transition-colors duration-200 last:border-0 hover:bg-brand/[0.03] focus:bg-elevated"
               >
                 {r.getVisibleCells().map((c) => (
@@ -160,7 +166,7 @@ export function NcTable({
         {itens.map((n, i) => (
           <li key={n.nc_id} className="anim-fade-up flex gap-3 px-4 py-4" style={{ ['--d' as string]: `${Math.min(i, 10) * 45}ms` }}>
             {selecao && <div className="pt-1">{selecao(n)}</div>}
-            <button className="min-w-0 flex-1 text-left" onClick={() => navigate(`/ncs/${n.nc_id}`)}>
+            <button className="min-w-0 flex-1 text-left" onClick={() => navigate(`/ncs/${n.nc_id}`)} onTouchStart={() => preCarregarNC(qc, n.nc_id)} onMouseEnter={() => preCarregarNC(qc, n.nc_id)}>
               <div className="flex items-center justify-between gap-2">
                 <span className="tabular font-semibold">NC {n.nc_id}</span>
                 <StatusPrazoBadge status={n.status_prazo} dias={n.dias_atraso} />

@@ -245,7 +245,7 @@ export const globais = {
     getProjectTriggers: () => [],
     deleteTrigger: () => {},
     WeekDay: { MONDAY: 'MONDAY' },
-    newTrigger: () => { const b = { timeBased: () => b, everyDays: () => b, atHour: () => b, inTimezone: () => b, onWeekDay: () => b, create: () => ({}) }; return b; },
+    newTrigger: () => { const b = { timeBased: () => b, everyDays: () => b, atHour: () => b, inTimezone: () => b, onWeekDay: () => b, after: () => b, create: () => ({}) }; return b; },
   },
   UrlFetchApp: { fetch: (url: string, opts: { payload: string }) => iaDemo(url, opts) },
 };

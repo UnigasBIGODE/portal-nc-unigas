@@ -13,6 +13,7 @@ import type { DetalheNC as DetalheT, Etapa, NC } from '@/lib/types';
 import { cn, fmtData, fmtDataHora, hojeISO, iniciais } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { enviarOuGuardar } from '@/lib/filaOffline';
+import { detalheProvisorio, ncDasListas } from '@/lib/preCarregarNC';
 import { useOpcoesFiltro, useTitulo } from '@/hooks/queries';
 import { Aviso, Badge, Button, Card, CardHeader, Dialog, EmptyState, ErrorState, Field, Input, Select, Skeleton, Tabs, Textarea } from '@/components/ui';
 import { AlertaBadge, CriticidadeBadge, EtapaBadge, StatusPrazoBadge } from '@/components/StatusBadges';
@@ -1041,7 +1042,16 @@ export default function DetalheNC() {
   useTitulo(`NC ${id}`);
   const qc = useQueryClient();
   const chave = ['nc', id];
-  const q = useQuery({ queryKey: chave, queryFn: () => api<DetalheCompleto>('detalheNC', { nc_id: Number(id) }) });
+  const q = useQuery({
+    queryKey: chave,
+    queryFn: () => api<DetalheCompleto>('detalheNC', { nc_id: Number(id) }),
+    // abre na hora com os dados da lista; o restante (comentários, anexos, ações) chega em seguida
+    placeholderData: () => {
+      const n = ncDasListas(qc, id!);
+      return n ? (detalheProvisorio(n) as DetalheCompleto) : undefined;
+    },
+  });
+  const provisorio = q.isPlaceholderData;
   const [editandoPlano, setEditandoPlano] = useState(false);
   const [plano, setPlano] = useState('');
   const [comentario, setComentario] = useState('');
@@ -1350,7 +1360,8 @@ export default function DetalheNC() {
                 <motion.div key={aba} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.2 }}>
                   {aba === 'comentarios' ? (
                     <div className="space-y-4">
-              {comentarios.length === 0 && <p className="text-sm text-muted">Nenhum comentário ainda.</p>}
+              {provisorio && <Skeleton className="h-16" />}
+              {!provisorio && comentarios.length === 0 && <p className="text-sm text-muted">Nenhum comentário ainda.</p>}
               {comentarios.map((c, i) => (
                 <motion.div key={c.id} className="flex gap-3" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i, 10) * 0.05 }}>
                   <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-elevated text-[11px] font-semibold">{iniciais(c.autor)}</div>
@@ -1377,7 +1388,8 @@ export default function DetalheNC() {
             </div>
                   ) : (
                     <ol className="relative space-y-4">
-              {historico.length === 0 && <EmptyState className="py-4" icon={<MessageSquare className="h-5 w-5" />} title="Sem alterações registradas" />}
+              {provisorio && <Skeleton className="h-16" />}
+              {!provisorio && historico.length === 0 && <EmptyState className="py-4" icon={<MessageSquare className="h-5 w-5" />} title="Sem alterações registradas" />}
               {historico.map((h, i) => (
                 <motion.li key={h.id} className="relative border-l border-line pl-4" initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: Math.min(i, 12) * 0.04 }}>
                   <span className="absolute -left-[4.5px] top-1.5 h-2 w-2 rounded-full bg-fg/50" aria-hidden />
@@ -1453,7 +1465,8 @@ export default function DetalheNC() {
               }
             />
             <ul className="space-y-1 p-3">
-              {anexos.length === 0 && <li className="px-2 py-3 text-sm text-muted">Nenhum anexo.</li>}
+              {provisorio && <li className="px-2 py-2"><Skeleton className="h-10" /></li>}
+              {!provisorio && anexos.length === 0 && <li className="px-2 py-3 text-sm text-muted">Nenhum anexo.</li>}
               <AnimatePresence initial={false}>
                 {anexos.map((a) => (
                   <motion.li

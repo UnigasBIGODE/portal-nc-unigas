@@ -2,7 +2,7 @@ import { CarregandoPagina } from '@/components/CarregandoLogo';
 import { LiquidToggle, NimbusToggleIcons } from '@/components/ui/liquid-glass-toggle';
 import { Component, Suspense, createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, NavLink, useLocation, useNavigate, Outlet } from 'react-router-dom';
-import { useIsFetching } from '@tanstack/react-query';
+import { useIsFetching, useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowUp, Bell, ChevronRight, ChevronsLeft, LifeBuoy, LogOut, Menu, RefreshCw, Search, ShieldCheck, Smartphone, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils';
 import { ADMIN, CONTA, MENU, trilha, type ItemNav } from './navegacao';
 import { CommandPalette } from './CommandPalette';
 import { IndicadorFila } from '../FilaOffline';
+import { preCarregarTelas } from '@/lib/preCarregarTelas';
 
 const LARGURA = { aberto: 272, recolhido: 84 };
 
@@ -623,9 +624,17 @@ export function AppLayout() {
   const [busca, setBusca] = useState(false);
   const [recolhido, setRecolhido] = useState(lerRecolhido);
   const loc = useLocation();
+  const qcTelas = useQueryClient();
+  const { usuario: euLayout, isAdmin: adminLayout } = useAuth();
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [loc.pathname]);
+  // telas e dados principais ficam prontos em segundo plano logo depois da abertura
+  useEffect(() => {
+    if (!euLayout) return;
+    const t = setTimeout(() => void preCarregarTelas(qcTelas, adminLayout), 2500);
+    return () => clearTimeout(t);
+  }, [euLayout, adminLayout, qcTelas]);
   useEffect(() => {
     const atalho = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {

@@ -12,7 +12,7 @@ import { useToast } from '@/components/Toast';
 import { useOpcoesFiltro, useTitulo } from '@/hooks/queries';
 import { NumeroAnimado } from '@/components/KpiCard';
 import { SucessoAnimado } from '@/components/Celebracao';
-import { Aviso, Badge, Button, Card, CardHeader, Dialog, EmptyState, Input, PageHeader, Select, Skeleton, Textarea } from '@/components/ui';
+import { Aviso, Badge, Button, Card, CardHeader, Dialog, EmptyState, Input, PageHeader, Skeleton, Textarea } from '@/components/ui';
 import { LumaAvatar } from '@/components/Assistente';
 
 const LOTE = 300;
@@ -468,29 +468,41 @@ function Problemas({ r }: { r: ResultadoImportacao }) {
 }
 
 /** Setor das NCs lidas: preencher as novas/sem setor e, se quiser, alterar as já classificadas. */
+const CLASSIFICAR = '';
+const SETA_SELECT = {
+  backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\")",
+};
+const CLASSE_SELECT =
+  'h-8 w-48 cursor-pointer appearance-none rounded-full border border-line bg-card bg-[length:14px] bg-[right_10px_center] bg-no-repeat pl-3 pr-8 text-[12px] text-fg outline-none transition-colors hover:border-fg/25 focus:border-brand/60 focus:ring-2 focus:ring-brand/15';
+
 function SetoresImportacao({ itens, escolhas, mudar }: { itens: SetorImport[]; escolhas: Record<number, string>; mudar: (m: Record<number, string>) => void }) {
   const { data: op } = useOpcoesFiltro();
   const areas = (op?.areas ?? []).filter((a) => a !== 'A classificar');
   const [todas, setTodas] = useState(false);
-  const [emMassa, setEmMassa] = useState('');
+  const [emMassa, setEmMassa] = useState<string | null>(null);
+  if (!itens.length) return null;
   const semSetor = itens.filter((s) => !s.atual);
   const classificadas = itens.filter((s) => s.atual);
   const lista = todas ? [...semSetor, ...classificadas] : semSetor;
   const comSugestao = semSetor.filter((s) => s.sugestao);
-  const faltando = semSetor.filter((s) => !escolhas[s.nc_id]).length;
-  if (!itens.length) return null;
-  const valorDe = (s: SetorImport) => escolhas[s.nc_id] ?? s.atual;
+  const valorDe = (s: SetorImport) => (s.nc_id in escolhas ? escolhas[s.nc_id] : s.atual);
+  const faltando = semSetor.filter((s) => !valorDe(s)).length;
+  const definirTodas = (v: string, alvo: SetorImport[]) => {
+    const m = { ...escolhas };
+    alvo.forEach((s) => (m[s.nc_id] = v));
+    mudar(m);
+  };
   const origem = (s: SetorImport) => {
     const v = valorDe(s);
-    if (!v) return null;
+    if (!v) return <span className="text-[11px] text-warning">a classificar</span>;
     if (s.atual && v === s.atual) return <span className="text-[11px] text-muted">atual</span>;
-    if (s.sugestao && v === s.sugestao && v !== s.arquivo)
+    if (s.arquivo && v === s.arquivo) return <span className="text-[11px] text-muted">da planilha</span>;
+    if (s.sugestao && v === s.sugestao)
       return (
         <span className="inline-flex items-center gap-1 text-[11px] font-medium text-brand" title="Sugerido pela LUMA com base nas NCs já classificadas">
           <LumaAvatar className="h-4 w-4" /> sugestão {Math.round(s.confianca * 100)}%
         </span>
       );
-    if (s.arquivo && v === s.arquivo) return <span className="text-[11px] text-muted">da planilha</span>;
     return <span className="text-[11px] font-medium text-fg">escolhido</span>;
   };
   return (
@@ -500,18 +512,19 @@ function SetoresImportacao({ itens, escolhas, mudar }: { itens: SetorImport[]; e
           <p className="font-semibold">Setor das NCs</p>
           <p className="text-[12px] text-muted">
             {semSetor.length
-              ? `${semSetor.length} NC(s) sem setor${comSugestao.length ? ` · ${comSugestao.length} com sugestão automática já preenchida` : ''}${faltando ? ` · ${faltando} ficarão "A classificar"` : ''}.`
+              ? `${semSetor.length} NC(s) sem setor${comSugestao.length ? ` · ${comSugestao.length} com sugestão automática` : ''}${faltando ? ` · ${faltando} ficarão "A classificar"` : ''}.`
               : 'Todas as NCs do arquivo já têm setor.'}{' '}
             Você pode alterar qualquer uma antes de confirmar.
           </p>
         </div>
         {semSetor.length > 0 && (
           <div className="flex flex-wrap items-center gap-2">
-            <Select className="h-8 w-44 rounded-full text-[12px]" value={emMassa} onChange={(e) => setEmMassa(e.target.value)} aria-label="Setor para todas sem setor">
-              <option value="">Definir as sem setor…</option>
+            <select className={CLASSE_SELECT} style={SETA_SELECT} value={emMassa ?? '__'} onChange={(e) => setEmMassa(e.target.value === '__' ? null : e.target.value)} aria-label="Setor para todas as sem setor">
+              <option value="__">Definir todas as sem setor…</option>
+              <option value={CLASSIFICAR}>A classificar (decidir depois)</option>
               {areas.map((a) => <option key={a}>{a}</option>)}
-            </Select>
-            <Button size="sm" variant="secondary" disabled={!emMassa} onClick={() => { const m = { ...escolhas }; semSetor.forEach((s) => (m[s.nc_id] = emMassa)); mudar(m); }}>
+            </select>
+            <Button size="sm" variant="secondary" disabled={emMassa === null} onClick={() => emMassa !== null && definirTodas(emMassa, semSetor)}>
               Aplicar
             </Button>
             {comSugestao.length > 0 && (
@@ -519,6 +532,9 @@ function SetoresImportacao({ itens, escolhas, mudar }: { itens: SetorImport[]; e
                 Usar sugestões
               </Button>
             )}
+            <Button size="sm" variant="ghost" onClick={() => definirTodas(CLASSIFICAR, semSetor)}>
+              Todas a classificar
+            </Button>
           </div>
         )}
       </div>
@@ -529,15 +545,18 @@ function SetoresImportacao({ itens, escolhas, mudar }: { itens: SetorImport[]; e
             {s.nova && <Badge tom="success">nova</Badge>}
             <span className="min-w-0 flex-1 truncate text-[13px]" title={s.titulo}>{s.titulo || 'Sem título'}</span>
             <span className="w-[130px] text-right">{origem(s)}</span>
-            <Select
-              className={cn('h-8 w-48 rounded-full text-[12px]', !valorDe(s) && 'border-warning/60')}
+            {/* <select> nativo: numa lista com rolagem, cada linha abre o seu sem cobrir as outras */}
+            <select
+              className={cn(CLASSE_SELECT, !valorDe(s) && 'border-warning/60')}
+              style={SETA_SELECT}
               value={valorDe(s)}
               onChange={(e) => mudar({ ...escolhas, [s.nc_id]: e.target.value })}
               aria-label={`Setor da NC ${s.nc_id}`}
             >
-              <option value="">A classificar</option>
+              <option value={CLASSIFICAR}>A classificar</option>
               {areas.map((a) => <option key={a}>{a}</option>)}
-            </Select>
+              {valorDe(s) && !areas.includes(valorDe(s)) && <option>{valorDe(s)}</option>}
+            </select>
           </li>
         ))}
       </ul>
@@ -677,8 +696,10 @@ export default function Importar() {
       // só vai o que muda o setor atual da NC
       const areasEscolhidas: Record<number, string> = {};
       (previa?.setores ?? []).forEach((x) => {
+        if (!(x.nc_id in setores)) return;
         const v = setores[x.nc_id];
         if (v && v !== x.atual) areasEscolhidas[x.nc_id] = v;
+        else if (!v && (x.atual || x.arquivo)) areasEscolhidas[x.nc_id] = '-'; // deixar "A classificar"
       });
       let acc = VAZIO;
       const total = partes.reduce((t, p) => t + Math.ceil(p.linhas.length / LOTE), 0) + (aFinalizar.length ? 1 : 0);

@@ -629,6 +629,54 @@
 }
 
 /* ==================================================================
+   LUMA — Inteligência Artificial Unigás
+================================================================== */
+.luma-botao {
+  background: radial-gradient(ellipse at 20% 0%, #ff5a4a 0%, transparent 60%), linear-gradient(145deg, #d10a17, #6e050e);
+  border: 1px solid rgb(255 190 190 / 45%);
+  box-shadow: inset 0 1px 2px rgb(255 220 222 / 50%), 0 10px 30px -6px rgb(227 6 19 / 55%), 0 0 0 4px rgb(227 6 19 / 10%);
+}
+.luma-botao:hover { box-shadow: inset 0 1px 2px rgb(255 220 222 / 50%), 0 14px 36px -6px rgb(227 6 19 / 70%), 0 0 0 6px rgb(227 6 19 / 14%); }
+.luma-faixa {
+  min-height: 132px;
+  background:
+    radial-gradient(ellipse at 85% 110%, rgb(255 110 60 / 55%), transparent 55%),
+    radial-gradient(ellipse at 10% -20%, rgb(227 6 19 / 55%), transparent 60%),
+    linear-gradient(150deg, #1d0507, #3a080c 60%, #5a0a10);
+}
+.luma-faixa::after {
+  content: '';
+  position: absolute;
+  inset: auto -20% -60% 20%;
+  height: 160px;
+  border-radius: 50%;
+  border-top: 2px solid rgb(255 120 80 / 45%);
+  transform: rotate(-8deg);
+}
+.login-marca {
+  background:
+    radial-gradient(ellipse at 90% 100%, rgb(255 106 61 / 35%), transparent 55%),
+    radial-gradient(ellipse at 0% 0%, rgb(227 6 19 / 40%), transparent 55%),
+    linear-gradient(155deg, #140305, #2b0609 55%, #4a080d);
+}
+.luma-flutua { animation: luma-flutua 4s ease-in-out infinite; filter: drop-shadow(0 6px 14px rgb(255 80 40 / 35%)); }
+.luma-pensa { animation: luma-pensa 1.6s ease-in-out infinite; transform-origin: bottom center; }
+@keyframes luma-flutua { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+@keyframes luma-pensa { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(3deg) translateY(-2px); } }
+.luma-insights {
+  background:
+    radial-gradient(ellipse at 0% 100%, rgb(255 90 50 / 22%), transparent 55%),
+    linear-gradient(144deg, var(--vg-card-light), transparent 66%), var(--vg-card);
+}
+@media (prefers-reduced-motion: reduce) { .luma-flutua, .luma-pensa { animation: none; } }
+.leve .luma-flutua, .leve .luma-pensa { animation: none !important; filter: none; }
+
+/* ===== ÍCONES PADRONIZADOS: mesmo traço em todo o portal e tamanho fixo dentro de botões */
+svg.lucide { stroke-width: 1.85; flex-shrink: 0; }
+button svg.lucide, a svg.lucide { vertical-align: middle; }
+.h-8 > svg.lucide:not([class*="h-"]), .h-9 > svg.lucide:not([class*="h-"]), .h-10 > svg.lucide:not([class*="h-"]) { width: 1rem; height: 1rem; }
+
+/* ==================================================================
    MODO LEVE (computadores mais simples) — classe "leve" no <html>.
    Mesmo visual, sem desfoque de fundo e sem animações contínuas.
 ================================================================== */

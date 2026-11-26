@@ -134,7 +134,7 @@ export default function PendenciasPagina() {
         <>
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-4 flex flex-wrap items-center gap-2 text-[13px] text-muted">
             {totalPendencias(p) === 0 ? (
-              <Badge tom="success">Tudo em dia 🎉</Badge>
+              <Badge tom="success"><CheckCircle2 className="h-3.5 w-3.5" /> Tudo em dia</Badge>
             ) : (
               <Badge tom="warning">{totalPendencias(p)} item(ns) pedem ação</Badge>
             )}

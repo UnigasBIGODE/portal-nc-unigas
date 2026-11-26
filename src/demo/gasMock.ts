@@ -21,6 +21,21 @@ function carregar() {
 }
 
 export const estado = carregar();
+
+/** Pasta simulada do Drive (as subpastas de anexos também caem aqui). */
+function pastaDemo(id: string): Record<string, unknown> {
+  return {
+    getId: () => id,
+    isTrashed: () => false,
+    getFoldersByName: () => ({ hasNext: () => false, next: () => null }),
+    createFolder: (nome: string) => pastaDemo('pasta-demo-' + nome.length),
+    createFile: (b: { getName: () => string; getContentType: () => string; getBytes: () => number[] }) => {
+      const fid = 'arq-' + Math.random().toString(36).slice(2, 10);
+      estado.arquivos[fid] = { nome: b.getName(), mime: b.getContentType(), b64: b64(b.getBytes()) };
+      return { getId: () => fid, getUrl: () => '#' };
+    },
+  };
+}
 // Demonstração: assistente de IA já "configurado" (as respostas são simuladas, sem chamar o Google).
 if (!estado.props.GEMINI_API_KEY) estado.props.GEMINI_API_KEY = 'demo-sem-chave-real-0000000000';
 
@@ -173,7 +188,7 @@ function b64(bytes) {
   semSinal(bytes).forEach((b) => { s += String.fromCharCode(b); });
   return btoa(s);
 }
-const blob = (bytes, mime, nome) => ({ getBytes: () => bytes, getContentType: () => mime, getName: () => nome });
+const blob = (bytes, mime, nome) => { const b = { getBytes: () => bytes, getContentType: () => mime, getName: () => nome, setName: (n) => { nome = n; return b; }, getAs: (m) => blob(bytes, m, String(nome || 'arquivo').replace(/\.[^.]+$/, '') + '.pdf') }; return b; };
 const cacheMap = new Map();
 const utf8 = (s) => Array.from(new TextEncoder().encode(String(s)));
 
@@ -217,14 +232,8 @@ export const globais = {
     },
   },
   DriveApp: {
-    createFolder: () => ({ getId: () => 'pasta-demo' }),
-    getFolderById: () => ({
-      createFile: (b) => {
-        const id = 'arq-' + Math.random().toString(36).slice(2, 10);
-        estado.arquivos[id] = { nome: b.getName(), mime: b.getContentType(), b64: b64(b.getBytes()) };
-        return { getId: () => id, getUrl: () => '#' };
-      },
-    }),
+    createFolder: () => pastaDemo('pasta-demo'),
+    getFolderById: (id: string) => pastaDemo(id),
     getFileById: (id) => {
       const a = estado.arquivos[id];
       if (!a) throw new Error('Arquivo não encontrado');

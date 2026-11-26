@@ -1,4 +1,4 @@
-import { useAssistente } from '@/components/Assistente';
+import { LumaAvatar, useAssistente } from '@/components/Assistente';
 import { createPortal } from 'react-dom';
 import { useRef, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
@@ -7,11 +7,12 @@ import { AnimatePresence, motion, useMotionValueEvent, useScroll } from 'framer-
 import { useToast } from '@/components/Toast';
 import { SucessoAnimado } from '@/components/Celebracao';
 import { comprimirImagem, nomeFotoCamera } from '@/lib/imagem';
-import { ArrowLeft, ArrowRight, Camera, CalendarClock, Check, Flag, CheckCircle2, Download, Eye, FileText, ImagePlus, Loader2, MessageSquare, Paperclip, Pencil, RotateCcw, Send, SendHorizontal, Sparkles, Trash2, Undo2, Upload, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Camera, CalendarClock, Check, Flag, CheckCircle2, Download, Eye, FileText, ImagePlus, Loader2, MessageSquare, Paperclip, Pencil, Repeat, RotateCcw, Send, SendHorizontal, Trash2, Undo2, Upload, X } from 'lucide-react';
 import { api, arquivoParaBase64, baixarBase64, mensagemErro } from '@/lib/api';
 import type { DetalheNC as DetalheT, Etapa, NC } from '@/lib/types';
 import { cn, fmtData, fmtDataHora, hojeISO, iniciais } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
+import { enviarOuGuardar } from '@/lib/filaOffline';
 import { useOpcoesFiltro, useTitulo } from '@/hooks/queries';
 import { Aviso, Badge, Button, Card, CardHeader, Dialog, EmptyState, ErrorState, Field, Input, Select, Skeleton, Tabs, Textarea } from '@/components/ui';
 import { AlertaBadge, CriticidadeBadge, EtapaBadge, StatusPrazoBadge } from '@/components/StatusBadges';
@@ -162,11 +163,63 @@ function EditarNC({ nc, aberto, fechar, salvar, salvando, erro }: { nc: NC; aber
 // ---------------------------------------------------------------- envio para verificação (com evidências)
 
 type Retomada = { de: string; para: string; motivo: string; autor: string; data: string };
+type Reincidencia = {
+  local: string;
+  total: number;
+  ultimoAno: number;
+  ncs: { nc_id: number; area: string; etapa: string; titulo: string; data_cadastro: string | null; status_prazo: string }[];
+};
+
+/** Aviso de reincidência: o mesmo local (endereço ou veículo) já teve outras NCs. */
+function AvisoReincidencia({ r }: { r: Reincidencia }) {
+  const [aberto, setAberto] = useState(false);
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="mb-4 overflow-hidden rounded-2xl border border-info/35 bg-info/[0.06] p-4 sm:p-5"
+      role="status"
+    >
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full bg-info/15 text-info">
+          <Repeat className="h-4 w-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold">
+            Reincidência: este local já teve {r.total} outra{r.total > 1 ? 's' : ''} NC{r.total > 1 ? 's' : ''}
+            {r.ultimoAno ? <span className="font-normal text-muted"> · {r.ultimoAno} nos últimos 12 meses</span> : null}
+          </p>
+          <p className="mt-0.5 text-[13px] text-muted">{r.local}</p>
+          <button onClick={() => setAberto((v) => !v)} className="mt-2 text-[13px] font-semibold text-info hover:underline">
+            {aberto ? 'Esconder histórico' : 'Ver histórico do local'}
+          </button>
+          <AnimatePresence initial={false}>
+            {aberto && (
+              <motion.ul initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="mt-2 space-y-1.5 overflow-hidden">
+                {r.ncs.map((x) => (
+                  <li key={x.nc_id}>
+                    <Link to={`/ncs/${x.nc_id}`} className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl bg-card/70 px-3 py-2 text-[13px] hover:bg-card">
+                      <b>NC {x.nc_id}</b>
+                      <span className="text-muted">{x.area}</span>
+                      <EtapaBadge etapa={x.etapa as Etapa} curto />
+                      <span className="text-muted">{x.data_cadastro ? fmtData(x.data_cadastro) : ''}</span>
+                    </Link>
+                  </li>
+                ))}
+              </motion.ul>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
 type Prorrogacao = { de: string; para: string; justificativa: string; autor: string; data: string };
 type DetalheCompleto = DetalheT & {
   podeEnviarVerificacao?: boolean;
   podeExcluirAnexo?: boolean;
   retomada?: Retomada | null;
+  reincidencia?: Reincidencia | null;
   prorrogacao?: Prorrogacao | null;
   podePedirProrrogacao?: boolean;
   podeResponderProrrogacao?: boolean;
@@ -342,6 +395,7 @@ function CampoEvidencias({ arquivos, setArquivos, obrigatorio, texto }: { arquiv
 /** Responsável pede mais prazo: a NC vai para verificação com a justificativa (volta ao verificador). */
 function PedirProrrogacao({ nc, onConcluido }: { nc: NC; onConcluido: (d: DetalheCompleto) => void }) {
   const toast = useToast();
+  const { usuario } = useAuth();
   const [aberto, setAberto] = useState(false);
   const [fase, setFase] = useState<Fase>('form');
   const [arquivos, setArquivos] = useState<ArquivoSel[]>([]);
@@ -371,7 +425,12 @@ function PedirProrrogacao({ nc, onConcluido }: { nc: NC; onConcluido: (d: Detalh
     try {
       const lista = [];
       for (const a of arquivos) lista.push({ nome: a.file.name, mimeType: a.file.type || 'application/octet-stream', base64: await arquivoParaBase64(a.file) });
-      const d = await api<DetalheCompleto>('pedirProrrogacao', { nc_id: nc.nc_id, novo_prazo: data, justificativa: just.trim(), arquivos: lista });
+      const r = await enviarOuGuardar<DetalheCompleto>('pedirProrrogacao', { nc_id: nc.nc_id, novo_prazo: data, justificativa: just.trim(), arquivos: lista }, `Prorrogação · NC ${nc.nc_id}`, usuario?.id || '');
+      if (r.enfileirado) {
+        guardadoOffline();
+        return;
+      }
+      const d = r.dados;
       resultado.current = d;
       setFase('sucesso');
       setTimeout(() => {
@@ -383,6 +442,13 @@ function PedirProrrogacao({ nc, onConcluido }: { nc: NC; onConcluido: (d: Detalh
       toast({ tipo: 'erro', titulo: 'Não foi possível enviar o pedido', descricao: mensagemErro(e) });
     }
   }
+  function guardadoOffline() {
+    setFase('form');
+    setAberto(false);
+    arquivos.forEach((a) => a.url && URL.revokeObjectURL(a.url));
+    toast({ tipo: 'info', titulo: 'Sem conexão: envio guardado', descricao: 'Ele será enviado automaticamente quando o sinal voltar. Acompanhe pelo aviso "envio pendente" no topo.' });
+  }
+
   const valido = !!data && data >= minimo && just.trim().length >= 10 && total <= MAX_TOTAL;
 
   return (
@@ -722,6 +788,7 @@ function AvisoReporteArea({ nc, r, podeResolver, onResolvido }: { nc: NC; r: Rep
 
 function EnviarVerificacao({ nc, exigeEvidencia, onConcluido }: { nc: NC; exigeEvidencia: boolean; onConcluido: (d: DetalheCompleto) => void }) {
   const toast = useToast();
+  const { usuario } = useAuth();
   const [aberto, setAberto] = useState(false);
   const [fase, setFase] = useState<Fase>('form');
   const [arquivos, setArquivos] = useState<{ file: File; url?: string }[]>([]);
@@ -755,8 +822,13 @@ function EnviarVerificacao({ nc, exigeEvidencia, onConcluido }: { nc: NC; exigeE
       for (const a of arquivos) lista.push({ nome: a.file.name, mimeType: a.file.type || 'application/octet-stream', base64: await arquivoParaBase64(a.file) });
       setPasso(1);
       const t = setTimeout(() => setPasso(2), 1400);
-      const d = await api<DetalheCompleto>('enviarParaVerificacao', { nc_id: nc.nc_id, data_execucao: data, observacao: obs.trim() || undefined, arquivos: lista });
+      const r = await enviarOuGuardar<DetalheCompleto>('enviarParaVerificacao', { nc_id: nc.nc_id, data_execucao: data, observacao: obs.trim() || undefined, arquivos: lista }, `Envio para verificação · NC ${nc.nc_id}`, usuario?.id || '');
       clearTimeout(t);
+      if (r.enfileirado) {
+        guardadoOffline();
+        return;
+      }
+      const d = r.dados;
       setPasso(3);
       resultado.current = d;
       await new Promise((r) => setTimeout(r, 350));
@@ -769,6 +841,13 @@ function EnviarVerificacao({ nc, exigeEvidencia, onConcluido }: { nc: NC; exigeE
       setFase('form');
       toast({ tipo: 'erro', titulo: 'Não foi possível enviar', descricao: mensagemErro(e) });
     }
+  }
+
+  function guardadoOffline() {
+    setFase('form');
+    setAberto(false);
+    arquivos.forEach((a) => a.url && URL.revokeObjectURL(a.url));
+    toast({ tipo: 'info', titulo: 'Sem conexão: envio guardado', descricao: 'Ele será enviado automaticamente quando o sinal voltar. Acompanhe pelo aviso "envio pendente" no topo.' });
   }
 
   const podeEnviar = (!exigeEvidencia || arquivos.length > 0) && total <= MAX_TOTAL && !!data;
@@ -956,6 +1035,7 @@ function FluxoEtapa({ nc, onFeito }: { nc: NC; onFeito: (d: DetalheT, acao: Acao
 }
 
 export default function DetalheNC() {
+  const { usuario: eu } = useAuth();
   const ia = useAssistente();
   const { id } = useParams();
   useTitulo(`NC ${id}`);
@@ -1019,9 +1099,13 @@ export default function DetalheNC() {
   const anexar = useMutation({
     mutationFn: async (f: File) => {
       if (f.size > 10 * 1024 * 1024) throw new Error('Arquivo maior que 10 MB.');
-      return api('anexar', { nc_id: Number(id), nome: f.name, mimeType: f.type || 'application/octet-stream', base64: await arquivoParaBase64(f) });
+      return enviarOuGuardar('anexar', { nc_id: Number(id), nome: f.name, mimeType: f.type || 'application/octet-stream', base64: await arquivoParaBase64(f) }, `Evidência ${f.name} · NC ${id}`, eu?.id || '');
     },
-    onSuccess: () => {
+    onSuccess: (r) => {
+      if (r.enfileirado) {
+        toast({ tipo: 'info', titulo: 'Sem conexão: evidência guardada', descricao: 'Ela será enviada automaticamente quando o sinal voltar.' });
+        return;
+      }
       toast({ tipo: 'sucesso', titulo: 'Evidência anexada', descricao: 'O arquivo foi salvo com segurança.' });
       qc.invalidateQueries({ queryKey: chave });
     },
@@ -1058,7 +1142,7 @@ export default function DetalheNC() {
       </Card>
     );
 
-  const { nc, comentarios, anexos, historico, podeEditarTudo, podeEditarPlano, podeEnviarVerificacao, podeExcluirAnexo, retomada, prorrogacao, podePedirProrrogacao, podeResponderProrrogacao, reporteArea, podeReportarArea, podeResolverReporte } = q.data;
+  const { nc, comentarios, anexos, historico, podeEditarTudo, podeEditarPlano, podeEnviarVerificacao, podeExcluirAnexo, retomada, reincidencia, prorrogacao, podePedirProrrogacao, podeResponderProrrogacao, reporteArea, podeReportarArea, podeResolverReporte } = q.data;
 
   return (
     <div>
@@ -1093,6 +1177,7 @@ export default function DetalheNC() {
       </Link>
 
       {retomada && <AvisoRetomada key={retomada.data} r={retomada} />}
+      {reincidencia && <AvisoReincidencia r={reincidencia} />}
       {reporteArea && (
         <AvisoReporteArea
           key={reporteArea.data}
@@ -1143,11 +1228,11 @@ export default function DetalheNC() {
             {ia.disponivel && (
               <>
                 <Button variant="secondary" onClick={() => ia.pedirNC('resumo', nc.nc_id)} title="Resumo da NC feito pela IA">
-                  <Sparkles className="h-4 w-4 text-brand" /> Resumir
+                  <LumaAvatar className="h-5 w-5" /> Resumir com a LUMA
                 </Button>
                 {nc.aberta && (
                   <Button variant="secondary" onClick={() => ia.pedirNC('plano', nc.nc_id)} title="Sugestão de plano de ação feita pela IA">
-                    <Sparkles className="h-4 w-4 text-brand" /> Plano de ação
+                    <LumaAvatar className="h-5 w-5" /> Plano de ação
                   </Button>
                 )}
               </>

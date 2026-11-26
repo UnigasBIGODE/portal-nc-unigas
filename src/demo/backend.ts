@@ -38,7 +38,9 @@ export async function chamarDemo(action: string, payload: unknown, token: string
     pronto = true;
   }
   // simula a latência do Apps Script
-  await new Promise((r) => setTimeout(r, 120 + Math.random() * 180));
+  // (para testes: localStorage.demo_latencia = ms extras, imitando o Apps Script real)
+  const extra = Number((() => { try { return localStorage.getItem('demo_latencia'); } catch { return 0; } })() || 0);
+  await new Promise((r) => setTimeout(r, 120 + Math.random() * 180 + extra));
   const out = gas.doPost({ postData: { contents: JSON.stringify({ action, payload, token }) } });
   salvarEstado();
   return JSON.parse(out.getContent());

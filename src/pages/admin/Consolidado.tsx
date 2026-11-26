@@ -61,11 +61,11 @@ export default function Consolidado() {
           <div className="stagger grid gap-4 lg:grid-cols-3">
             <Card>
               <CardHeader title="Mais NCs atrasadas" description="Abertas fora do prazo" />
-              <div className="p-5 pt-4">{porAtraso.length ? <RankingChart dados={porAtraso as never} chave="atrasadas" nome="Atrasadas" /> : <EmptyState title="Nenhuma atrasada 🎉" />}</div>
+              <div className="p-5 pt-4">{porAtraso.length ? <RankingChart dados={porAtraso as never} chave="atrasadas" nome="Atrasadas" /> : <EmptyState title="Nenhuma atrasada" />}</div>
             </Card>
             <Card>
               <CardHeader title="Maior média de atraso" description="Dias, entre as atrasadas" />
-              <div className="p-5 pt-4">{porMedia.length ? <RankingChart dados={porMedia as never} chave="mediaDiasAtraso" nome="Média (dias)" formatar={(v) => `${v.toLocaleString("pt-BR")} d`} /> : <EmptyState title="Sem atrasos 🎉" />}</div>
+              <div className="p-5 pt-4">{porMedia.length ? <RankingChart dados={porMedia as never} chave="mediaDiasAtraso" nome="Média (dias)" formatar={(v) => `${v.toLocaleString("pt-BR")} d`} /> : <EmptyState title="Sem atrasos" />}</div>
             </Card>
             <Card>
               <CardHeader title={`% encerradas no prazo · ${ano}`} description={`Meta: ${q.data.metaPct}%`} />

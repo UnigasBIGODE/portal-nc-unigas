@@ -13,7 +13,8 @@ import { Button, Card, CardHeader, EmptyState, ErrorState, Skeleton } from '@/co
 import { KpiCard, KpiSkeleton, NumeroAnimado } from '@/components/KpiCard';
 import { FiltrosBar, type Periodo } from '@/components/FiltrosBar';
 import { NcTable } from '@/components/NcTable';
-import { AbertasPorAreaChart, CadastradasChart, CriticidadeChart, EncerradasPorMesChart, GerenciaChart } from '@/components/charts/Charts';
+import { AbertasPorAreaChart, CadastradasChart, EncerradasPorMesChart } from '@/components/charts/Charts';
+import { LumaInsights } from '@/components/LumaInsights';
 import { useTitulo } from '@/hooks/queries';
 
 gsap.registerPlugin(useGSAP);
@@ -94,7 +95,7 @@ function Destaque({ d, irLista }: { d: DashboardT; irLista: (p: Record<string, s
             className="mt-3 text-[20px] font-semibold leading-snug tracking-tight sm:text-[22px]"
             partes={
               ok
-                ? [{ t: `Nenhuma NC atrasada. Todas as ${k.abertas} NCs abertas estão dentro do prazo. 🎉` }]
+                ? [{ t: `Nenhuma NC atrasada. Todas as ${k.abertas} NCs abertas estão dentro do prazo.` }]
                 : [
                     { t: 'Você tem ' },
                     { t: `${k.atrasadas} NC${k.atrasadas > 1 ? 's' : ''} atrasada${k.atrasadas > 1 ? 's' : ''}`, cls: 'text-danger' },
@@ -167,10 +168,7 @@ export default function Dashboard() {
             {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
           </p>
           <h1 className="vg-titulo mt-2">
-            {saudacao()}, {primeiroNome(usuario?.nome ?? '')}{' '}
-            <motion.span className="inline-block origin-[70%_70%]" animate={{ rotate: [0, 14, -8, 14, -4, 10, 0] }} transition={{ duration: 1.6, delay: 0.6 }}>
-              👋
-            </motion.span>
+            {saudacao()}, <span className="text-brand">{primeiroNome(usuario?.nome ?? '')}</span>
           </h1>
           <p className="mt-2 text-[13px] font-medium text-[var(--vg-muted)]">
             {d?.ultimaImportacao?.data ? <>Dados atualizados em {fmtDataHora(d.ultimaImportacao.data)}</> : 'Nenhuma importação registrada ainda'}
@@ -254,17 +252,12 @@ export default function Dashboard() {
               {d && <EncerradasPorMesChart dados={d.encerradasPorMes} meta={d.metaPct} />}
             </ChartCard>
             <ChartCard className="xl:col-span-2" atraso={0.08} title="NCs abertas por área" description="Clique numa barra para abrir a lista" carregando={!d}>
-              {d && (d.abertasPorArea.length ? <AbertasPorAreaChart dados={d.abertasPorArea} onClickArea={(a) => irLista({ area: a, aba: 'abertas' })} /> : <EmptyState title="Nenhuma NC aberta 🎉" />)}
+              {d && (d.abertasPorArea.length ? <AbertasPorAreaChart dados={d.abertasPorArea} onClickArea={(a) => irLista({ area: a, aba: 'abertas' })} /> : <EmptyState icon={<CheckCircle2 className="h-5 w-5 text-success" />} title="Nenhuma NC aberta" />)}
             </ChartCard>
           </section>
 
           <section className="mt-4 grid gap-4 lg:grid-cols-3">
-            <ChartCard title="Distribuição por criticidade" description="NCs abertas, escala 0–6" carregando={!d}>
-              {d && <CriticidadeChart dados={d.porCriticidade} limite={config?.criticidadeCriticaMin ?? 3} />}
-            </ChartCard>
-            <ChartCard atraso={0.08} title="NCs abertas por gerência" carregando={!d}>
-              {d && (d.porGerencia.length ? <GerenciaChart dados={d.porGerencia} /> : <EmptyState title="Nenhuma NC aberta 🎉" />)}
-            </ChartCard>
+            <LumaInsights className="lg:col-span-2" />
             <ChartCard atraso={0.16} title="NCs cadastradas por mês" description="Últimos 12 meses" carregando={!d}>
               {d && <CadastradasChart dados={d.cadastradasPorMes} />}
             </ChartCard>
@@ -286,7 +279,7 @@ export default function Dashboard() {
                   itens={d?.atencao ?? []}
                   carregando={!d}
                   colunas={['nc_id', 'area', 'titulo', 'criticidade', 'prazo', 'etapa', 'status_prazo', 'dias_atraso']}
-                  vazio={<EmptyState icon={<CheckCircle2 className="h-5 w-5 text-success" />} title="Nenhuma NC atrasada 🎉" description="Todas as NCs abertas estão dentro do prazo." />}
+                  vazio={<EmptyState icon={<CheckCircle2 className="h-5 w-5 text-success" />} title="Nenhuma NC atrasada" description="Todas as NCs abertas estão dentro do prazo." />}
                 />
               </div>
             </div>

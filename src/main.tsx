@@ -1,7 +1,9 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { HashRouter, MemoryRouter } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient } from '@tanstack/react-query';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
+import { deveGuardar, IDADE_MAXIMA_CACHE, persistidor, VERSAO_CACHE } from './lib/cacheLocal';
 import { MotionConfig } from 'framer-motion';
 import App from './App';
 import { ToastProvider } from './components/Toast';
@@ -26,7 +28,8 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 2 * 60_000,
-      gcTime: 15 * 60_000,
+      // precisa ser ≥ a idade máxima do cache local, senão os dados restaurados são descartados
+      gcTime: IDADE_MAXIMA_CACHE,
       refetchOnWindowFocus: false,
       retry: (n, e) => !['SESSAO_INVALIDA', 'SEM_PERMISSAO', 'NAO_ENCONTRADA', 'CONFIG'].includes((e as ApiError).code) && n < 1,
     },
@@ -36,7 +39,15 @@ const queryClient = new QueryClient({
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <Router>
-      <QueryClientProvider client={queryClient}>
+      <PersistQueryClientProvider
+        client={queryClient}
+        persistOptions={{
+          persister: persistidor,
+          maxAge: IDADE_MAXIMA_CACHE,
+          buster: VERSAO_CACHE,
+          dehydrateOptions: { shouldDehydrateQuery: (q) => deveGuardar(q.queryKey, q.state.status) },
+        }}
+      >
         <ThemeProvider>
           <MotionConfig reducedMotion="user">
             <ToastProvider>
@@ -46,7 +57,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             </ToastProvider>
           </MotionConfig>
         </ThemeProvider>
-      </QueryClientProvider>
+      </PersistQueryClientProvider>
     </Router>
   </React.StrictMode>,
 );

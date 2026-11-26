@@ -3,6 +3,7 @@ import { Camera, Feather, Gauge, Moon, ShieldCheck, Sparkles, Sun, Trash2 } from
 import { definirPreferenciaDesempenho, preferenciaDesempenho, useModoLeve, type PreferenciaDesempenho } from '@/lib/desempenho';
 import { motion } from 'framer-motion';
 import { Avatar, prepararFotoPerfil } from '@/components/Avatar';
+import { reverTour } from '@/components/TourLuma';
 import { api, mensagemErro } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
@@ -142,6 +143,13 @@ export default function Conta() {
               ]}
               className="w-fit"
             />
+            <div className="mt-5 border-t border-line pt-4">
+              <p className="text-sm font-semibold">Tour de boas-vindas</p>
+              <p className="mb-3 mt-0.5 text-[13px] text-muted">Veja de novo a apresentação rápida do portal com a LUMA.</p>
+              <Button size="sm" variant="secondary" onClick={reverTour}>
+                <img src="./luma/icone.webp" alt="" className="h-5 w-5 rounded-full object-cover" /> Rever o tour
+              </Button>
+            </div>
             <div className="mt-5 border-t border-line pt-4">
               <p className="text-sm font-semibold">Desempenho</p>
               <p className="mb-3 mt-0.5 text-[13px] text-muted">

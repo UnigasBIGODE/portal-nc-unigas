@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BellOff, ChevronRight } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { mensagemErro } from '@/lib/api';
 import { fmtData } from '@/lib/utils';
@@ -43,7 +43,7 @@ export default function Alertas() {
         ) : q.isLoading ? (
           <div className="space-y-2 p-5">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14" />)}</div>
         ) : itens.length === 0 ? (
-          <EmptyState icon={<BellOff className="h-5 w-5" />} title="Nenhum alerta 🎉" description="Tudo em dia por aqui." />
+          <EmptyState icon={<img src="./luma/otimo.webp" alt="" className="h-16" />} title="Nenhum alerta" description="Tudo em dia por aqui." />
         ) : (
           <ul className="divide-y divide-line/60">
             {itens.map((a, i) => (

@@ -4,7 +4,7 @@ import { Component, Suspense, createContext, useContext, useEffect, useRef, useS
 import { Link, NavLink, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { useIsFetching } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowUp, Bell, ChevronRight, ChevronsLeft, LifeBuoy, LogOut, Menu, Search, ShieldCheck, Smartphone, X } from 'lucide-react';
+import { ArrowUp, Bell, ChevronRight, ChevronsLeft, LifeBuoy, LogOut, Menu, RefreshCw, Search, ShieldCheck, Smartphone, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useInstalarApp } from '@/lib/pwa';
 import { useToast } from '@/components/Toast';
@@ -14,11 +14,13 @@ import { totalPendencias, usePendencias } from '@/pages/admin/Pendencias';
 import { Logo } from '../Logo';
 import { Avatar } from '../Avatar';
 import { AssistenteProvider } from '../Assistente';
+import { TourLuma } from '../TourLuma';
 import { AlertaBadge } from '../StatusBadges';
 import { Badge, Button, Dialog, Skeleton } from '../ui';
 import { cn } from '@/lib/utils';
 import { ADMIN, CONTA, MENU, trilha, type ItemNav } from './navegacao';
 import { CommandPalette } from './CommandPalette';
+import { IndicadorFila } from '../FilaOffline';
 
 const LARGURA = { aberto: 272, recolhido: 84 };
 
@@ -379,7 +381,7 @@ function Sino() {
                   <Skeleton className="h-12" />
                 </div>
               )}
-              {data && data.itens.length === 0 && <p className="px-4 py-10 text-center text-sm text-muted">Nenhum alerta no momento 🎉</p>}
+              {data && data.itens.length === 0 && <div className="flex flex-col items-center gap-2 px-4 py-8 text-center text-sm text-muted"><img src="./luma/otimo.webp" alt="" className="h-14" /> Nenhum alerta no momento.</div>}
               {data?.itens.slice(0, 8).map((a, i) => (
                 <motion.div key={i} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.035 }} onMouseEnter={() => setSobre(i)} onMouseLeave={() => setSobre(null)}>
                   <Link to={`/ncs/${a.nc_id}`} className="lg-track group relative flex gap-3 rounded-xl px-3 py-2.5 [&>*]:relative">
@@ -430,6 +432,36 @@ function BarraProgresso() {
   );
 }
 
+/** Aviso discreto enquanto os dados da tela são atualizados em segundo plano. */
+function IndicadorAtualizando() {
+  const buscando = useIsFetching();
+  const [visivel, setVisivel] = useState(false);
+  // só aparece se demorar mais de 0,4 s (evita piscar em respostas rápidas)
+  useEffect(() => {
+    if (!buscando) {
+      setVisivel(false);
+      return;
+    }
+    const t = setTimeout(() => setVisivel(true), 400);
+    return () => clearTimeout(t);
+  }, [buscando]);
+  return (
+    <AnimatePresence>
+      {visivel && (
+        <motion.span
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.9 }}
+          className="vg-segmento hidden shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] font-semibold text-[var(--vg-muted)] md:inline-flex"
+          role="status"
+        >
+          <RefreshCw className="h-3 w-3 animate-spin" aria-hidden /> Atualizando…
+        </motion.span>
+      )}
+    </AnimatePresence>
+  );
+}
+
 function Topbar({ abrirMenu, abrirBusca }: { abrirMenu: () => void; abrirBusca: () => void }) {
   const { tema, alternar } = useTheme();
   const { usuario } = useAuth();
@@ -471,6 +503,8 @@ function Topbar({ abrirMenu, abrirBusca }: { abrirMenu: () => void; abrirBusca: 
             );
           })}
         </nav>
+        <IndicadorFila />
+        <IndicadorAtualizando />
         <div className="ml-auto flex items-center gap-2">
           <button
             onClick={abrirBusca}
@@ -618,6 +652,7 @@ export function AppLayout() {
 
   return (
     <AssistenteProvider>
+      <TourLuma />
     <div className="min-h-screen" style={{ ['--menu' as string]: `${recolhido ? LARGURA.recolhido : LARGURA.aberto}px` }}>
       <BarraProgresso />
       <a href="#conteudo" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-full focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-fg">

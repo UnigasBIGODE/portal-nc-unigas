@@ -8,6 +8,7 @@ import { useTitulo } from '@/hooks/queries';
 import { Aviso, Badge, Button, Card, CardHeader, ErrorState, Field, Input, PageHeader, Select, Skeleton } from '@/components/ui';
 import { CheckCircle2, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { LumaAvatar } from '@/components/Assistente';
 
 const semAcento = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 
@@ -86,10 +87,10 @@ export default function Configuracoes() {
           <CardHeader
             title={
               <span className="inline-flex items-center gap-2">
-                <span className="vg-orbe !h-6 !w-6" aria-hidden /> Assistente de IA (Gemini)
+                <LumaAvatar className="h-7 w-7" /> LUMA – Inteligência Artificial (Gemini)
               </span>
             }
-            description="Chat “Pergunte à IA” e os botões Resumir / Plano de ação nas NCs."
+            description="Chat da LUMA, Insights do Dashboard e os botões Resumir / Plano de ação nas NCs."
             action={
               q.data.iaChaveConfigurada ? (
                 <Badge tom="success">
@@ -115,7 +116,7 @@ export default function Configuracoes() {
             >
               <Input type="password" autoComplete="off" placeholder={q.data.iaChaveConfigurada ? '•••••••• (cole outra para trocar)' : 'Cole a chave aqui (começa com AIza…)'} value={iaChave} onChange={(e) => setIaChave(e.target.value)} />
             </Field>
-            <Field label="Assistente ativo" hint="Desative para esconder o assistente de todos os usuários.">
+            <Field label="Assistente ativo" hint="Desative para esconder a LUMA de todos os usuários.">
               <Select value={semAcento(v.ia_ativa ?? 'sim') === 'nao' ? 'nao' : 'sim'} onChange={(e) => setV({ ...v, ia_ativa: e.target.value })}>
                 <option value="sim">Sim</option>
                 <option value="nao">Não</option>

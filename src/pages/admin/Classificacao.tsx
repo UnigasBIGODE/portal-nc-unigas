@@ -75,7 +75,7 @@ export default function Classificacao() {
             carregando={q.isFetching}
             selecao={selecao}
             colunas={['nc_id', 'titulo', 'criticidade', 'verificador', 'gerencia', 'data_cadastro', 'prazo', 'etapa', 'status_prazo']}
-            vazio={<EmptyState icon={<CheckCircle2 className="h-5 w-5 text-success" />} title="Tudo classificado 🎉" description="Nenhuma NC sem área responsável." />}
+            vazio={<EmptyState icon={<CheckCircle2 className="h-5 w-5 text-success" />} title="Tudo classificado" description="Nenhuma NC sem área responsável." />}
           />
         )}
       </Card>

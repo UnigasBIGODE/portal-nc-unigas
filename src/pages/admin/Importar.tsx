@@ -183,7 +183,7 @@ function Ausentes({ lista, totalAbertas, decisoes, mudar, carregando }: {
         <div className="flex items-start gap-2 border-b border-warning/30 bg-warning/[0.08] px-4 py-3 text-[13px] text-warning">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
-            Atenção: {lista.length} de {totalAbertas} NCs abertas ficaram de fora. Confira se enviou <b>os dois arquivos</b> (execução e verificação) antes de confirmar.
+            Atenção: {lista.length} de {totalAbertas} NCs abertas ficaram de fora. Confira se o arquivo traz <b>todas as NCs abertas</b> (execução e verificação) antes de confirmar.
           </span>
         </div>
       )}
@@ -240,7 +240,7 @@ function Ausentes({ lista, totalAbertas, decisoes, mudar, carregando }: {
 
 /** Caixa de upload de uma planilha (execução ou verificação). */
 function CaixaArquivo({ titulo, descricao, cor, indice, arquivo, escolher }: {
-  titulo: string; descricao: string; cor: 'warning' | 'info'; indice: number; arquivo: File | null; escolher: (f: File | null) => void;
+  titulo: string; descricao: string; cor: 'warning' | 'info' | 'brand'; indice: number; arquivo: File | null; escolher: (f: File | null) => void;
 }) {
   const ref = useRef<HTMLInputElement>(null);
   const [sobre, setSobre] = useState(false);
@@ -250,7 +250,9 @@ function CaixaArquivo({ titulo, descricao, cor, indice, arquivo, escolher }: {
   };
   const tons = cor === 'warning'
     ? { borda: 'border-warning/60', fundo: 'bg-warning/[0.06]', icone: 'bg-warning/12 text-warning', ponto: 'bg-warning' }
-    : { borda: 'border-info/60', fundo: 'bg-info/[0.06]', icone: 'bg-info/12 text-info', ponto: 'bg-info' };
+    : cor === 'brand'
+      ? { borda: 'border-brand/50', fundo: 'bg-brand/[0.04]', icone: 'bg-brand/10 text-brand', ponto: 'bg-brand' }
+      : { borda: 'border-info/60', fundo: 'bg-info/[0.06]', icone: 'bg-info/12 text-info', ponto: 'bg-info' };
   return (
     <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: [0.2, 0.8, 0.2, 1], delay: indice * 0.08 }}>
       <div
@@ -481,7 +483,8 @@ function SetoresImportacao({ itens, escolhas, mudar }: { itens: SetorImport[]; e
   const [todas, setTodas] = useState(false);
   const [emMassa, setEmMassa] = useState<string | null>(null);
   if (!itens.length) return null;
-  const semSetor = itens.filter((s) => !s.atual);
+  // abertas primeiro (são as que vão para os responsáveis); finalizadas no fim
+  const semSetor = itens.filter((s) => !s.atual).sort((a, b) => Number(!!a.finalizada) - Number(!!b.finalizada));
   const classificadas = itens.filter((s) => s.atual);
   const lista = todas ? [...semSetor, ...classificadas] : semSetor;
   const comSugestao = semSetor.filter((s) => s.sugestao);
@@ -543,6 +546,7 @@ function SetoresImportacao({ itens, escolhas, mudar }: { itens: SetorImport[]; e
           <li key={s.nc_id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2.5">
             <span className="tabular w-[72px] shrink-0 text-[13px] font-semibold">NC {s.nc_id}</span>
             {s.nova && <Badge tom="success">nova</Badge>}
+            {s.finalizada && <Badge tom="neutral">finalizada</Badge>}
             <span className="min-w-0 flex-1 truncate text-[13px]" title={s.titulo}>{s.titulo || 'Sem título'}</span>
             <span className="w-[130px] text-right">{origem(s)}</span>
             {/* <select> nativo: numa lista com rolagem, cada linha abre o seu sem cobrir as outras */}
@@ -576,6 +580,15 @@ export default function Importar() {
   const { atualizarSessao } = useAuth();
   const [arqExec, setArqExec] = useState<File | null>(null);
   const [arqVerif, setArqVerif] = useState<File | null>(null);
+  const [arqCompleto, setArqCompleto] = useState<File | null>(null);
+  // "completa" = um relatório só com todas as NCs (abertas e finalizadas); "duas" = execução + verificação
+  const [modo, setModoEstado] = useState<'completa' | 'duas'>(() => {
+    try { return localStorage.getItem('unigas_import_modo') === 'duas' ? 'duas' : 'completa'; } catch { return 'completa'; }
+  });
+  const setModo = (m: 'completa' | 'duas') => {
+    setModoEstado(m);
+    try { localStorage.setItem('unigas_import_modo', m); } catch { /* ignora */ }
+  };
   const [partes, setPartes] = useState<{ nome: string; aba: string; linhas: Linha[] }[]>([]);
   const nomes = partes.map((p) => p.nome).join(' + ');
   const totalLinhas = partes.reduce((t, p) => t + p.linhas.length, 0);
@@ -647,7 +660,7 @@ export default function Importar() {
       setAusentes(null);
       setPrevia(acc);
       setFase('preview');
-      const conf = lidas.length > 1;
+      const conf = lidas.length > 1; // com o relatório completo, as finalizadas já vêm no arquivo
       setConferir(conf);
       if (conf) void buscarAusentes(acc.ids ?? []);
     } catch (e) {
@@ -743,6 +756,7 @@ export default function Importar() {
       setPartes([]);
       setArqExec(null);
       setArqVerif(null);
+      setArqCompleto(null);
       concluir();
     } catch (e) {
       setErro(mensagemErro(e));
@@ -758,6 +772,7 @@ export default function Importar() {
     setConferir(false);
     setArqExec(null);
     setArqVerif(null);
+    setArqCompleto(null);
     setPrevia(null);
     setResultado(null);
     setDecisoes({});
@@ -768,7 +783,7 @@ export default function Importar() {
     <div>
       <PageHeader eyebrow="Administração"
         title="Importar dados do Obrasoft"
-        subtitle="Anexe as duas planilhas exportadas do Obrasoft (em execução e em verificação). As NCs são atualizadas pelo NC ID, sem duplicar."
+        subtitle="Anexe o relatório do Obrasoft com todas as NCs (abertas e finalizadas) ou, se preferir, as duas planilhas separadas. As NCs são atualizadas pelo NC ID, sem duplicar."
         actions={
           <Button variant="secondary" size="sm" onClick={() => setConfirmarEntrada(true)} loading={reprocessando}>
             <RefreshCw className="h-4 w-4" /> Reprocessar aba de entrada
@@ -780,35 +795,77 @@ export default function Importar() {
       <Card className="anim-fade-up p-5 sm:p-6">
         {fase === 'inicio' && (
           <div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <CaixaArquivo
-                titulo="NCs em execução"
-                descricao="Export do Obrasoft com as NCs “Em execução c/ Unigás”"
-                cor="warning"
-                indice={0}
-                arquivo={arqExec}
-                escolher={setArqExec}
-              />
-              <CaixaArquivo
-                titulo="NCs em verificação"
-                descricao="Export do Obrasoft com as NCs “Em verificação c/ Comgás”"
-                cor="info"
-                indice={1}
-                arquivo={arqVerif}
-                escolher={setArqVerif}
-              />
+            <div className="vg-segmento mb-5 inline-flex rounded-full p-1" role="tablist" aria-label="Como enviar">
+              {([['completa', 'Um arquivo com tudo'], ['duas', 'Duas planilhas (execução + verificação)']] as const).map(([m, rot]) => (
+                <button
+                  key={m}
+                  type="button"
+                  role="tab"
+                  aria-selected={modo === m}
+                  onClick={() => setModo(m)}
+                  className={cn('rounded-full px-4 py-1.5 text-[13px] font-semibold transition-colors', modo === m ? 'vg-pick text-[var(--vg-pick-ink)]' : 'text-muted hover:text-fg')}
+                >
+                  {rot}
+                </button>
+              ))}
             </div>
-            <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-              <p className="max-w-xl text-[13px] text-muted">
-                Com as duas planilhas, o portal atualiza as NCs e confere quais abertas não vieram em nenhuma (finalizadas no Obrasoft). Nada é gravado antes da sua confirmação.
-              </p>
-              <motion.div animate={arqExec && arqVerif ? { scale: [1, 1.05, 1] } : { scale: 1 }} transition={{ duration: 0.4 }}>
-                <Button size="lg" variant="brand" disabled={!arqExec || !arqVerif} onClick={() => arqExec && arqVerif && void escolher([arqExec, arqVerif])}>
-                  <UploadCloud className="h-5 w-5" />
-                  {arqExec && arqVerif ? 'Analisar as duas planilhas' : `Anexe ${!arqExec && !arqVerif ? 'as duas planilhas' : 'a outra planilha'}`}
-                </Button>
-              </motion.div>
-            </div>
+            {modo === 'completa' ? (
+              <>
+                <div className="mx-auto max-w-2xl">
+                  <CaixaArquivo
+                    titulo="Relatório completo do Obrasoft"
+                    descricao="Export com todas as NCs da Unigás: em execução, em verificação e finalizadas (pode ter várias abas)"
+                    cor="brand"
+                    indice={0}
+                    arquivo={arqCompleto}
+                    escolher={setArqCompleto}
+                  />
+                </div>
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+                  <p className="max-w-xl text-[13px] text-muted">
+                    Cada NC fica na etapa que vier na coluna Etapa: as <b>finalizadas</b> (ou concluídas/encerradas) já entram como finalizadas, sem aviso por e-mail. Nada é gravado antes da sua confirmação.
+                  </p>
+                  <motion.div animate={arqCompleto ? { scale: [1, 1.05, 1] } : { scale: 1 }} transition={{ duration: 0.4 }}>
+                    <Button size="lg" variant="brand" disabled={!arqCompleto} onClick={() => arqCompleto && void escolher([arqCompleto])}>
+                      <UploadCloud className="h-5 w-5" />
+                      {arqCompleto ? 'Analisar a planilha' : 'Anexe o relatório'}
+                    </Button>
+                  </motion.div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <CaixaArquivo
+                    titulo="NCs em execução"
+                    descricao="Export do Obrasoft com as NCs “Em execução c/ Unigás”"
+                    cor="warning"
+                    indice={0}
+                    arquivo={arqExec}
+                    escolher={setArqExec}
+                  />
+                  <CaixaArquivo
+                    titulo="NCs em verificação"
+                    descricao="Export do Obrasoft com as NCs “Em verificação c/ Comgás”"
+                    cor="info"
+                    indice={1}
+                    arquivo={arqVerif}
+                    escolher={setArqVerif}
+                  />
+                </div>
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+                  <p className="max-w-xl text-[13px] text-muted">
+                    Com as duas planilhas, o portal atualiza as NCs e confere quais abertas não vieram em nenhuma (finalizadas no Obrasoft). Nada é gravado antes da sua confirmação.
+                  </p>
+                  <motion.div animate={arqExec && arqVerif ? { scale: [1, 1.05, 1] } : { scale: 1 }} transition={{ duration: 0.4 }}>
+                    <Button size="lg" variant="brand" disabled={!arqExec || !arqVerif} onClick={() => arqExec && arqVerif && void escolher([arqExec, arqVerif])}>
+                      <UploadCloud className="h-5 w-5" />
+                      {arqExec && arqVerif ? 'Analisar as duas planilhas' : `Anexe ${!arqExec && !arqVerif ? 'as duas planilhas' : 'a outra planilha'}`}
+                    </Button>
+                  </motion.div>
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -845,9 +902,9 @@ export default function Importar() {
               <input type="checkbox" checked={conferir} onChange={(e) => alternarConferir(e.target.checked)} className="mt-1 h-4 w-4 accent-[#16A34A]" />
               <span className="flex-1">
                 <span className="flex items-center gap-2 font-semibold">
-                  <CheckCheck className="h-4 w-4 text-success" /> Estes arquivos têm todas as NCs abertas (execução + verificação)
+                  <CheckCheck className="h-4 w-4 text-success" /> Conferir NCs abertas no portal que não vieram no arquivo
                 </span>
-                <span className="mt-0.5 block text-[13px] text-muted">O portal lista as NCs abertas que não vieram em nenhum arquivo para você finalizar. Deixe desmarcado se enviou só parte das NCs.</span>
+                <span className="mt-0.5 block text-[13px] text-muted">Útil quando o arquivo traz todas as NCs abertas: o portal lista as que ficaram de fora para você finalizar. Deixe desmarcado se o arquivo tem só parte das NCs (ex.: filtrado por período).</span>
               </span>
             </label>
             <AnimatePresence initial={false}>

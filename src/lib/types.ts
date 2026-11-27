@@ -176,6 +176,8 @@ export interface SetorImport {
   nc_id: number;
   titulo: string;
   nova: boolean;
+  /** já veio finalizada no arquivo */
+  finalizada?: boolean;
   /** setor que a NC já tem no portal ('' = a classificar) */
   atual: string;
   /** setor que veio na planilha (se tinha a coluna) */
